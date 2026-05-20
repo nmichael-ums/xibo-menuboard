@@ -396,6 +396,43 @@ class MenuBoard extends ModuleWidget
             $fontFamily = htmlspecialchars($slot['fontFamily'] ?? 'Arial, sans-serif', ENT_QUOTES);
             $textAlign  = htmlspecialchars($slot['textAlign']  ?? 'left',    ENT_QUOTES);
 
+            if ($type === 'rect' || $type === 'line') {
+                $fillColor    = htmlspecialchars($slot['fillColor']   ?? '#333333', ENT_QUOTES);
+                $opacity      = number_format((float)($slot['opacity'] ?? 1.0), 2);
+                $borderRadius = (int)($slot['borderRadius']           ?? 0);
+                $strokeColor  = htmlspecialchars($slot['strokeColor'] ?? '#ffffff', ENT_QUOTES);
+                $strokeWidth  = (int)($slot['strokeWidth']            ?? 2);
+                $style = "position:absolute;"
+                       . "left:{$x}px;top:{$y}px;"
+                       . "width:{$w}px;height:{$h}px;"
+                       . "background:{$fillColor};"
+                       . "opacity:{$opacity};";
+                if ($type === 'rect') {
+                    $style .= "border:{$strokeWidth}px solid {$strokeColor};"
+                            . "border-radius:{$borderRadius}px;";
+                }
+                $slotsHtml .= "<div class='mb-slot' style='{$style}'></div>\n";
+                continue;
+            }
+
+            if ($type === 'text') {
+                $content        = htmlspecialchars($slot['content'] ?? '', ENT_QUOTES);
+                $justifyContent = $textAlign === 'right' ? 'flex-end' : ($textAlign === 'center' ? 'center' : 'flex-start');
+                $style = "position:absolute;"
+                       . "left:{$x}px;top:{$y}px;"
+                       . "width:{$w}px;height:{$h}px;"
+                       . "font-size:{$fontSize}px;"
+                       . "font-family:{$fontFamily};"
+                       . "color:{$color};"
+                       . "font-weight:{$fontWeight};"
+                       . "font-style:{$fontStyle};"
+                       . "text-align:{$textAlign};"
+                       . "display:flex;align-items:center;justify-content:{$justifyContent};"
+                       . "overflow:hidden;";
+                $slotsHtml .= "<div class='mb-slot' style='{$style}'>{$content}</div>\n";
+                continue;
+            }
+
             if ($type === 'name') {
                 $displayText = htmlspecialchars($itemNames[$itemId] ?? '', ENT_QUOTES);
                 if ($displayText === '') continue;

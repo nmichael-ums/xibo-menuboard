@@ -283,6 +283,9 @@ button:disabled { background: #333; color: #666; cursor: default; }
 .se-type { font-size:9px;padding:1px 4px;border-radius:2px;flex-shrink:0;font-weight:bold;letter-spacing:0.03em; }
 .se-type-price { background:#1a3d1a;color:#5d5; }
 .se-type-name  { background:#1a2d4a;color:#5af; }
+.se-type-text  { background:#2a1a4a;color:#b8f; }
+.se-type-rect  { background:#3a2000;color:#fa6; }
+.se-type-line  { background:#003030;color:#5df; }
 /* ── Scheduler tab ────────────────────────────────────────── */
 #tabScheduler { position: relative; overflow: hidden; }
 #schedInner   { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 8px 16px 16px; overflow: hidden; }
@@ -403,29 +406,38 @@ button:disabled { background: #333; color: #666; cursor: default; }
         <h3>Add Field</h3>
         <div class="field-row">
           <label>Field Type</label>
-          <select id="pNewType" style="width:100%">
+          <select id="pNewType" style="width:100%" onchange="onNewTypeChange()">
             <option value="price">Price</option>
             <option value="name">Item Name</option>
+            <option value="text">Text Label</option>
+            <option value="rect">Rectangle</option>
+            <option value="line">Line</option>
           </select>
         </div>
-        <div class="field-row">
-          <label>Concept</label>
-          <select id="pFilterConcept" style="width:100%" onchange="onPanelConceptChange()">
-            <option value="">All Concepts</option>
-          </select>
+        <div id="addItemFilters">
+          <div class="field-row">
+            <label>Concept</label>
+            <select id="pFilterConcept" style="width:100%" onchange="onPanelConceptChange()">
+              <option value="">All Concepts</option>
+            </select>
+          </div>
+          <div class="field-row">
+            <label>Category</label>
+            <select id="pFilterCat" style="width:100%" onchange="filterPanelItems()">
+              <option value="">All Categories</option>
+            </select>
+          </div>
+          <div class="field-row">
+            <input type="text" id="pFilterSearch" placeholder="Search items…" oninput="filterPanelItems()" style="width:100%">
+          </div>
+          <div class="field-row">
+            <label>Menu Item</label>
+            <select id="pNewItem" style="width:100%"></select>
+          </div>
         </div>
-        <div class="field-row">
-          <label>Category</label>
-          <select id="pFilterCat" style="width:100%" onchange="filterPanelItems()">
-            <option value="">All Categories</option>
-          </select>
-        </div>
-        <div class="field-row">
-          <input type="text" id="pFilterSearch" placeholder="Search items…" oninput="filterPanelItems()" style="width:100%">
-        </div>
-        <div class="field-row">
-          <label>Menu Item</label>
-          <select id="pNewItem" style="width:100%"></select>
+        <div id="addTextContent" class="field-row" style="display:none">
+          <label>Text Content</label>
+          <input type="text" id="pTextContent" value="Label" style="width:100%">
         </div>
         <button onclick="startAddMode()" style="width:100%" id="btnAddSlot" disabled>
           + Click Canvas to Place
@@ -473,47 +485,69 @@ button:disabled { background: #333; color: #666; cursor: default; }
           <div><label>Width</label><input type="number" id="spW" oninput="onPropChange()"></div>
           <div><label>Height</label><input type="number" id="spH" oninput="onPropChange()"></div>
         </div>
-        <div class="field-row-2">
-          <div><label>Font Size (px)</label><input type="number" id="spFontSize" min="6" max="300" oninput="onPropChange()"></div>
-          <div><label>Color</label><input type="color" id="spColor" oninput="onPropChange()" style="width:100%"></div>
+        <div class="field-row" id="spTextContentRow" style="display:none">
+          <label>Text Content</label>
+          <input type="text" id="spTextContent" oninput="onPropChange()" style="width:100%">
         </div>
-        <div class="field-row">
-          <label>Font Family</label>
-          <select id="spFontFamily" style="width:100%" oninput="onPropChange()">
-            <option value="Arial, sans-serif">Arial</option>
-            <option value="'Helvetica Neue', Helvetica, sans-serif">Helvetica Neue</option>
-            <option value="Verdana, sans-serif">Verdana</option>
-            <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
-            <option value="Georgia, serif">Georgia</option>
-            <option value="'Times New Roman', Times, serif">Times New Roman</option>
-            <option value="Impact, 'Arial Narrow', sans-serif">Impact</option>
-            <option value="'Arial Black', sans-serif">Arial Black</option>
-            <option value="'Courier New', monospace">Courier New</option>
-          </select>
-        </div>
-        <div class="field-row-2">
-          <div>
-            <label>Weight</label>
-            <select id="spWeight" oninput="onPropChange()">
-              <option value="bold">Bold</option>
-              <option value="normal">Normal</option>
+        <div id="spFontProps">
+          <div class="field-row-2">
+            <div><label>Font Size (px)</label><input type="number" id="spFontSize" min="6" max="300" oninput="onPropChange()"></div>
+            <div><label>Color</label><input type="color" id="spColor" oninput="onPropChange()" style="width:100%"></div>
+          </div>
+          <div class="field-row">
+            <label>Font Family</label>
+            <select id="spFontFamily" style="width:100%" oninput="onPropChange()">
+              <option value="Arial, sans-serif">Arial</option>
+              <option value="'Helvetica Neue', Helvetica, sans-serif">Helvetica Neue</option>
+              <option value="Verdana, sans-serif">Verdana</option>
+              <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+              <option value="Georgia, serif">Georgia</option>
+              <option value="'Times New Roman', Times, serif">Times New Roman</option>
+              <option value="Impact, 'Arial Narrow', sans-serif">Impact</option>
+              <option value="'Arial Black', sans-serif">Arial Black</option>
+              <option value="'Courier New', monospace">Courier New</option>
             </select>
           </div>
-          <div>
-            <label>Style</label>
-            <select id="spStyle" oninput="onPropChange()">
-              <option value="normal">Normal</option>
-              <option value="italic">Italic</option>
+          <div class="field-row-2">
+            <div>
+              <label>Weight</label>
+              <select id="spWeight" oninput="onPropChange()">
+                <option value="bold">Bold</option>
+                <option value="normal">Normal</option>
+              </select>
+            </div>
+            <div>
+              <label>Style</label>
+              <select id="spStyle" oninput="onPropChange()">
+                <option value="normal">Normal</option>
+                <option value="italic">Italic</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-row">
+            <label>Align</label>
+            <select id="spAlign" style="width:100%" oninput="onPropChange()">
+              <option value="left">Left</option>
+              <option value="center">Center</option>
+              <option value="right">Right</option>
             </select>
           </div>
         </div>
-        <div class="field-row">
-          <label>Align</label>
-          <select id="spAlign" style="width:100%" oninput="onPropChange()">
-            <option value="left">Left</option>
-            <option value="center">Center</option>
-            <option value="right">Right</option>
-          </select>
+        <div id="spShapeProps" style="display:none">
+          <div class="field-row-2">
+            <div><label>Fill Color</label><input type="color" id="spFillColor" oninput="onPropChange()" style="width:100%;height:28px;padding:2px;border:1px solid #505050;border-radius:3px;background:#383838;cursor:pointer"></div>
+            <div><label>Opacity (0–1)</label><input type="number" id="spOpacity" min="0" max="1" step="0.05" oninput="onPropChange()" style="width:100%"></div>
+          </div>
+          <div id="spRectOnlyProps">
+            <div class="field-row-2">
+              <div><label>Stroke Color</label><input type="color" id="spStrokeColor" oninput="onPropChange()" style="width:100%;height:28px;padding:2px;border:1px solid #505050;border-radius:3px;background:#383838;cursor:pointer"></div>
+              <div><label>Stroke Width</label><input type="number" id="spStrokeWidth" min="0" max="20" oninput="onPropChange()" style="width:100%"></div>
+            </div>
+            <div class="field-row">
+              <label>Border Radius (px)</label>
+              <input type="number" id="spBorderRadius" min="0" oninput="onPropChange()" style="width:100%">
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1120,20 +1154,31 @@ function setupCanvasEvents() {
         const r      = canvas.getBoundingClientRect();
         const x      = Math.max(0, Math.round((e.clientX - r.left) / scale));
         const y      = Math.max(0, Math.round((e.clientY - r.top)  / scale));
-        const itemId  = parseInt(document.getElementById('pNewItem').value);
         const newType = document.getElementById('pNewType').value || 'price';
-        const isPrice = newType === 'price';
-        const slot    = {
-            id: 'slot_' + Date.now(), itemId,
-            type:       newType,
-            x, y, w: isPrice ? 100 : 160, h: isPrice ? 50 : 52, fontSize: 32,
-            fontFamily: 'Arial, sans-serif',
-            color:      isPrice ? '#000000' : '#ffffff',
-            fontWeight: 'bold',
-            fontStyle:  'normal',
-            textAlign:  newType === 'name' ? 'left' : 'right',
-            _color:     nextColor(),
-        };
+        let slot;
+        if (newType === 'rect') {
+            slot = { id: 'slot_' + Date.now(), type: 'rect', x, y, w: 200, h: 100,
+                fillColor: '#333333', strokeColor: '#ffffff', strokeWidth: 2,
+                opacity: 1.0, borderRadius: 0, _color: nextColor() };
+        } else if (newType === 'line') {
+            slot = { id: 'slot_' + Date.now(), type: 'line', x, y, w: 400, h: 4,
+                fillColor: '#ffffff', opacity: 1.0, _color: nextColor() };
+        } else if (newType === 'text') {
+            const content = document.getElementById('pTextContent').value || 'Label';
+            slot = { id: 'slot_' + Date.now(), type: 'text', content, x, y, w: 200, h: 60,
+                fontSize: 32, fontFamily: 'Arial, sans-serif', color: '#ffffff',
+                fontWeight: 'normal', fontStyle: 'normal', textAlign: 'center', _color: nextColor() };
+        } else {
+            const itemId  = parseInt(document.getElementById('pNewItem').value);
+            const isPrice = newType === 'price';
+            slot = { id: 'slot_' + Date.now(), itemId, type: newType,
+                x, y, w: isPrice ? 100 : 160, h: isPrice ? 50 : 52, fontSize: 32,
+                fontFamily: 'Arial, sans-serif',
+                color:      isPrice ? '#000000' : '#ffffff',
+                fontWeight: 'bold', fontStyle: 'normal',
+                textAlign:  newType === 'name' ? 'left' : 'right',
+                _color:     nextColor() };
+        }
         slots.push(slot);
         selectOne(slot.id);
         renderCanvas();
@@ -1219,9 +1264,13 @@ function renderCanvas() {
 }
 
 function buildSlotEl(slot) {
-    const item  = items.find(i => i.itemId == slot.itemId);
-    const name  = item ? item.name : `Item #${slot.itemId}`;
-    const color = slot._color || '#8af';
+    const isShape = slot.type === 'rect' || slot.type === 'line';
+    const isText  = slot.type === 'text';
+    const item    = (!isShape && !isText) ? items.find(i => i.itemId == slot.itemId) : null;
+    const label   = isText  ? (slot.content || 'Text')
+                  : isShape ? (slot.type === 'rect' ? 'Rectangle' : 'Line')
+                  : (item ? item.name : `Item #${slot.itemId}`);
+    const color   = slot._color || '#8af';
 
     const el          = document.createElement('div');
     el.className      = 'pf' + (selectedIds.has(slot.id) ? ' active' : '');
@@ -1230,29 +1279,43 @@ function buildSlotEl(slot) {
     el.style.top      = (slot.y * scale) + 'px';
     el.style.width    = (slot.w * scale) + 'px';
     el.style.height   = (slot.h * scale) + 'px';
-    el.style.borderColor = color + '88';
+
+    if (isShape) {
+        el.style.background   = slot.fillColor || '#333';
+        el.style.opacity      = slot.opacity   ?? 1;
+        el.style.border       = slot.type === 'rect'
+            ? `${slot.strokeWidth ?? 2}px solid ${slot.strokeColor || '#fff'}`
+            : 'none';
+        el.style.borderRadius = slot.type === 'rect' ? (slot.borderRadius ?? 0) + 'px' : '0';
+    } else {
+        el.style.borderColor = color + '88';
+    }
 
     const preview     = document.createElement('div');
     preview.className = 'pf-preview';
-    preview.style.fontSize       = (slot.fontSize * scale) + 'px';
-    preview.style.color          = slot.color      || '#fff';
-    preview.style.fontWeight     = slot.fontWeight  || 'bold';
-    preview.style.justifyContent = slot.textAlign === 'left'   ? 'flex-start'
-                                 : slot.textAlign === 'center' ? 'center'
-                                 :                               'flex-end';
-    preview.style.fontFamily = slot.fontFamily || 'Arial, sans-serif';
-    preview.style.fontStyle  = slot.fontStyle  || 'normal';
-    if (slot.type === 'name') {
-        const previewItem = items.find(i => i.itemId == slot.itemId);
-        preview.textContent = previewItem ? previewItem.name : 'Item Name';
-    } else {
-        preview.textContent = '0.00';
+    if (!isShape) {
+        preview.style.fontSize       = (slot.fontSize * scale) + 'px';
+        preview.style.color          = slot.color      || '#fff';
+        preview.style.fontWeight     = slot.fontWeight  || 'bold';
+        preview.style.justifyContent = slot.textAlign === 'left'   ? 'flex-start'
+                                     : slot.textAlign === 'center' ? 'center'
+                                     :                               'flex-end';
+        preview.style.fontFamily = slot.fontFamily || 'Arial, sans-serif';
+        preview.style.fontStyle  = slot.fontStyle  || 'normal';
+        if (isText) {
+            preview.textContent = slot.content || 'Text';
+        } else if (slot.type === 'name') {
+            const previewItem = items.find(i => i.itemId == slot.itemId);
+            preview.textContent = previewItem ? previewItem.name : 'Item Name';
+        } else {
+            preview.textContent = '0.00';
+        }
     }
 
     const badge       = document.createElement('div');
     badge.className   = 'pf-name-badge';
     badge.style.color = color;
-    badge.textContent = name;
+    badge.textContent = label;
 
     const handle      = document.createElement('div');
     handle.className  = 'resize-handle';
@@ -1294,17 +1357,29 @@ function rebuildSlotList() {
     const list = document.getElementById('slotListWrap');
     list.innerHTML = '';
     slots.forEach(slot => {
-        const item  = items.find(i => i.itemId == slot.itemId);
-        const name  = item ? item.name : `Item #${slot.itemId}`;
+        const item  = slot.itemId ? items.find(i => i.itemId == slot.itemId) : null;
+        const name  = slot.type === 'text' ? (slot.content || 'Text')
+                    : slot.type === 'rect' ? 'Rectangle'
+                    : slot.type === 'line' ? 'Line'
+                    : item ? item.name : `Item #${slot.itemId}`;
         const color = slot._color || '#8af';
         const div   = document.createElement('div');
         div.className      = 'slot-entry' + (selectedIds.has(slot.id) ? ' active' : '');
         div.dataset.slotId = slot.id;
-        const isName = slot.type === 'name';
+        const typeClass = slot.type === 'name' ? 'se-type-name'
+                        : slot.type === 'text' ? 'se-type-text'
+                        : slot.type === 'rect' ? 'se-type-rect'
+                        : slot.type === 'line' ? 'se-type-line'
+                        : 'se-type-price';
+        const typeLabel = slot.type === 'name' ? 'NAME'
+                        : slot.type === 'text' ? 'TEXT'
+                        : slot.type === 'rect' ? 'RECT'
+                        : slot.type === 'line' ? 'LINE'
+                        : 'PRICE';
         div.innerHTML = `
             <span class="se-dot" style="background:${color}"></span>
             <span class="se-label">${esc(name)}</span>
-            <span class="se-type ${isName ? 'se-type-name' : 'se-type-price'}">${isName ? 'NAME' : 'PRICE'}</span>
+            <span class="se-type ${typeClass}">${typeLabel}</span>
             <button class="se-del" title="Delete (Del key)">✕</button>
         `;
         div.addEventListener('click', e => {
@@ -1393,16 +1468,38 @@ function updateSlotPropsPanel() {
     const slot = slots.find(s => s.id === primarySlotId);
     if (!slot) { panel.style.display = 'none'; return; }
     panel.style.display = 'block';
-    document.getElementById('spX').value        = slot.x;
-    document.getElementById('spY').value        = slot.y;
-    document.getElementById('spW').value        = slot.w;
-    document.getElementById('spH').value        = slot.h;
-    document.getElementById('spFontSize').value   = slot.fontSize   || 32;
-    document.getElementById('spColor').value      = slot.color      || '#ffffff';
-    document.getElementById('spFontFamily').value = slot.fontFamily || 'Arial, sans-serif';
-    document.getElementById('spWeight').value     = slot.fontWeight || 'bold';
-    document.getElementById('spStyle').value      = slot.fontStyle  || 'normal';
-    document.getElementById('spAlign').value      = slot.textAlign  || 'left';
+    const isShape = slot.type === 'rect' || slot.type === 'line';
+    const isText  = slot.type === 'text';
+    document.getElementById('spX').value = slot.x;
+    document.getElementById('spY').value = slot.y;
+    document.getElementById('spW').value = slot.w;
+    document.getElementById('spH').value = slot.h;
+    // Text content row
+    document.getElementById('spTextContentRow').style.display = isText ? '' : 'none';
+    if (isText) document.getElementById('spTextContent').value = slot.content || '';
+    // Font props (price, name, text)
+    document.getElementById('spFontProps').style.display = isShape ? 'none' : '';
+    if (!isShape) {
+        document.getElementById('spFontSize').value   = slot.fontSize   || 32;
+        document.getElementById('spColor').value      = slot.color      || '#ffffff';
+        document.getElementById('spFontFamily').value = slot.fontFamily || 'Arial, sans-serif';
+        document.getElementById('spWeight').value     = slot.fontWeight || 'bold';
+        document.getElementById('spStyle').value      = slot.fontStyle  || 'normal';
+        document.getElementById('spAlign').value      = slot.textAlign  || 'left';
+    }
+    // Shape props (rect, line)
+    document.getElementById('spShapeProps').style.display = isShape ? '' : 'none';
+    if (isShape) {
+        document.getElementById('spFillColor').value = slot.fillColor || '#333333';
+        document.getElementById('spOpacity').value   = slot.opacity   ?? 1;
+        const isRect = slot.type === 'rect';
+        document.getElementById('spRectOnlyProps').style.display = isRect ? '' : 'none';
+        if (isRect) {
+            document.getElementById('spStrokeColor').value  = slot.strokeColor  || '#ffffff';
+            document.getElementById('spStrokeWidth').value  = slot.strokeWidth  ?? 2;
+            document.getElementById('spBorderRadius').value = slot.borderRadius ?? 0;
+        }
+    }
 }
 
 function syncPropsFromSlot(slot) {
@@ -1415,32 +1512,61 @@ function syncPropsFromSlot(slot) {
 function onPropChange() {
     const slot = slots.find(s => s.id === primarySlotId);
     if (!slot) return;
-    slot.x          = Math.max(0,  parseInt(document.getElementById('spX').value)        || 0);
-    slot.y          = Math.max(0,  parseInt(document.getElementById('spY').value)        || 0);
-    slot.w          = Math.max(20, parseInt(document.getElementById('spW').value)        || 160);
-    slot.h          = Math.max(10, parseInt(document.getElementById('spH').value)        || 52);
-    slot.fontSize   = Math.max(6,  parseInt(document.getElementById('spFontSize').value) || 32);
-    slot.color      = document.getElementById('spColor').value;
-    slot.fontFamily = document.getElementById('spFontFamily').value;
-    slot.fontWeight = document.getElementById('spWeight').value;
-    slot.fontStyle  = document.getElementById('spStyle').value;
-    slot.textAlign  = document.getElementById('spAlign').value;
+    const isShape = slot.type === 'rect' || slot.type === 'line';
+    const isText  = slot.type === 'text';
+    slot.x = Math.max(0,  parseInt(document.getElementById('spX').value) || 0);
+    slot.y = Math.max(0,  parseInt(document.getElementById('spY').value) || 0);
+    slot.w = Math.max(20, parseInt(document.getElementById('spW').value) || 160);
+    slot.h = Math.max(10, parseInt(document.getElementById('spH').value) || 52);
+    if (isText) slot.content = document.getElementById('spTextContent').value;
+    if (!isShape) {
+        slot.fontSize   = Math.max(6, parseInt(document.getElementById('spFontSize').value) || 32);
+        slot.color      = document.getElementById('spColor').value;
+        slot.fontFamily = document.getElementById('spFontFamily').value;
+        slot.fontWeight = document.getElementById('spWeight').value;
+        slot.fontStyle  = document.getElementById('spStyle').value;
+        slot.textAlign  = document.getElementById('spAlign').value;
+    }
+    if (isShape) {
+        slot.fillColor = document.getElementById('spFillColor').value;
+        slot.opacity   = parseFloat(document.getElementById('spOpacity').value) || 1;
+        if (slot.type === 'rect') {
+            slot.strokeColor  = document.getElementById('spStrokeColor').value;
+            slot.strokeWidth  = parseInt(document.getElementById('spStrokeWidth').value) || 0;
+            slot.borderRadius = parseInt(document.getElementById('spBorderRadius').value) || 0;
+        }
+    }
     const el = document.querySelector(`.pf[data-slot-id="${slot.id}"]`);
     if (el) {
         el.style.left   = (slot.x * scale) + 'px';
         el.style.top    = (slot.y * scale) + 'px';
         el.style.width  = (slot.w * scale) + 'px';
         el.style.height = (slot.h * scale) + 'px';
-        const p = el.querySelector('.pf-preview');
-        if (p) {
-            p.style.fontSize       = (slot.fontSize * scale) + 'px';
-            p.style.color          = slot.color;
-            p.style.fontFamily     = slot.fontFamily || 'Arial, sans-serif';
-            p.style.fontWeight     = slot.fontWeight;
-            p.style.fontStyle      = slot.fontStyle  || 'normal';
-            p.style.justifyContent = slot.textAlign === 'left'   ? 'flex-start'
-                                   : slot.textAlign === 'center' ? 'center'
-                                   :                               'flex-end';
+        if (isShape) {
+            el.style.background   = slot.fillColor || '#333';
+            el.style.opacity      = slot.opacity   ?? 1;
+            el.style.border       = slot.type === 'rect'
+                ? `${slot.strokeWidth ?? 2}px solid ${slot.strokeColor || '#fff'}`
+                : 'none';
+            el.style.borderRadius = slot.type === 'rect' ? (slot.borderRadius ?? 0) + 'px' : '0';
+        } else {
+            const p = el.querySelector('.pf-preview');
+            if (p) {
+                p.style.fontSize       = (slot.fontSize * scale) + 'px';
+                p.style.color          = slot.color;
+                p.style.fontFamily     = slot.fontFamily || 'Arial, sans-serif';
+                p.style.fontWeight     = slot.fontWeight;
+                p.style.fontStyle      = slot.fontStyle  || 'normal';
+                p.style.justifyContent = slot.textAlign === 'left'   ? 'flex-start'
+                                       : slot.textAlign === 'center' ? 'center'
+                                       :                               'flex-end';
+                if (isText) p.textContent = slot.content || '';
+            }
+            if (isText) {
+                const badge = el.querySelector('.pf-name-badge');
+                if (badge) badge.textContent = slot.content || 'Text';
+                rebuildSlotList();
+            }
         }
     }
     markDirty();
@@ -1448,12 +1574,23 @@ function onPropChange() {
 
 // ── ADD / DELETE ──────────────────────────────────────────────────────────────
 
+function onNewTypeChange() {
+    const type = document.getElementById('pNewType').value;
+    const isItem = type === 'price' || type === 'name';
+    const isText = type === 'text';
+    document.getElementById('addItemFilters').style.display = isItem ? '' : 'none';
+    document.getElementById('addTextContent').style.display = isText ? '' : 'none';
+}
+
 function startAddMode() {
     if (!currentThemeId) { setStatus('Select a theme first', 'err'); return; }
     addMode = true;
     document.getElementById('canvas').classList.add('mode-add');
     document.getElementById('btnAddSlot').textContent = '⏎ Click on canvas…';
-    setStatus('Click on the canvas to place the price field', 'info');
+    const type = document.getElementById('pNewType').value;
+    const label = type === 'price' ? 'price field' : type === 'name' ? 'item name'
+                : type === 'text'  ? 'text label'  : type === 'rect' ? 'rectangle' : 'line';
+    setStatus(`Click on the canvas to place the ${label}`, 'info');
 }
 
 function deleteSlot(id) {
