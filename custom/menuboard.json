@@ -1,0 +1,7 @@
+{
+  "title": "Menu Board",
+  "author": "United Media Solutions",
+  "description": "Dynamic digital menu board with per-store pricing and version support",
+  "name": "menuboard",
+  "class": "Xibo\\Custom\\MenuBoard\\MenuBoard"
+}

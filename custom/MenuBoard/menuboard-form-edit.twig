@@ -1,0 +1,32 @@
+{% extends "form-base.twig" %}
+{% import "forms.twig" as forms %}
+
+{% block formTitle %}
+    {% trans "Edit Menu Board" %}
+{% endblock %}
+
+{% block formHtml %}
+    <div class="row">
+        <div class="col-md-12">
+            <form id="menuboardFormEdit" class="XiboForm form-horizontal" method="put" action="{{ urlFor("module.widget.edit", {id: module.widget.widgetId}) }}">
+
+                {% set title %}{% trans "Store" %}{% endset %}
+                {% set helpText %}{% trans "Select which store this menu board belongs to" %}{% endset %}
+                {{ forms.dropdown("storeId", "single", title, module.getOption("storeId", ""), displayGroups, "displayGroupId", "displayGroup", helpText) }}
+
+                {% set title %}{% trans "Theme" %}{% endset %}
+                {% set helpText %}{% trans "Select the layout template for this board" %}{% endset %}
+                {{ forms.dropdown("themeId", "single", title, module.getOption("themeId", 1), themes, "themeId", "themeName", helpText) }}
+
+                {% set title %}{% trans "Set a duration?" %}{% endset %}
+                {% set helpText %}{% trans "Select to provide a specific duration for this Widget" %}{% endset %}
+                {{ forms.checkbox("useDuration", title, module.getUseDuration(), helpText) }}
+
+                {% set title %}{% trans "Duration" %}{% endset %}
+                {% set helpText %}{% trans "The duration in seconds this should be displayed" %}{% endset %}
+                {{ forms.number("duration", title, module.getDuration(), helpText, "duration-fields", "required") }}
+
+            </form>
+        </div>
+    </div>
+{% endblock %}

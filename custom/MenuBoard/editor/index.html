@@ -1,0 +1,2593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MenuBoard Theme Editor</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    background: #1a1a1a;
+    color: #ddd;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+#topbar {
+    background: #2a2a2a;
+    border-bottom: 2px solid #3a3a3a;
+    padding: 6px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    min-height: 44px;
+}
+#topbar h1 { font-size: 15px; font-weight: bold; color: #fff; white-space: nowrap; margin-right: 4px; }
+.tb-sep { color: #555; padding: 0 2px; }
+select, input[type=text], input[type=number] {
+    background: #383838;
+    border: 1px solid #505050;
+    color: #ddd;
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    height: 28px;
+}
+select:focus, input:focus { outline: 1px solid #0080ff; border-color: #0080ff; }
+button {
+    background: #1a6cc4;
+    color: #fff;
+    border: none;
+    padding: 0 12px;
+    height: 28px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    white-space: nowrap;
+    transition: background 0.15s;
+}
+button:hover    { background: #1558a0; }
+button.green    { background: #2d7a2d; }
+button.green:hover { background: #236023; }
+button.red      { background: #8b2020; }
+button.red:hover   { background: #6e1a1a; }
+button.grey     { background: #444; }
+button.grey:hover  { background: #555; }
+button:disabled { background: #333; color: #666; cursor: default; }
+#statusMsg { margin-left: auto; font-size: 12px; color: #777; white-space: nowrap; }
+#statusMsg.ok   { color: #5d5; font-weight: bold; }
+#statusMsg.err  { color: #d55; font-weight: bold; }
+#statusMsg.info { color: #5af; }
+#tabs {
+    display: flex;
+    background: #222;
+    border-bottom: 2px solid #3a3a3a;
+    flex-shrink: 0;
+}
+.tab {
+    padding: 7px 18px;
+    cursor: pointer;
+    font-size: 12px;
+    color: #888;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    user-select: none;
+}
+.tab:hover  { color: #bbb; }
+.tab.active { color: #fff; border-bottom-color: #0080ff; }
+#main { display: flex; flex: 1; overflow: hidden; }
+#panel {
+    width: 260px;
+    min-width: 200px;
+    background: #222;
+    border-right: 2px solid #3a3a3a;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+.panel-section { padding: 8px 10px; border-bottom: 1px solid #2e2e2e; }
+.panel-section h3 {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #666;
+    margin-bottom: 6px;
+}
+.field-row { margin-bottom: 6px; }
+.field-row label { display: block; font-size: 11px; color: #999; margin-bottom: 2px; }
+.field-row input[type=text],
+.field-row input[type=number],
+.field-row select { width: 100%; }
+.field-row input[type=color] {
+    width: 100%; height: 28px; padding: 2px;
+    border: 1px solid #505050; border-radius: 3px;
+    background: #383838; cursor: pointer;
+}
+.field-row-2 { display: flex; gap: 6px; margin-bottom: 6px; }
+.field-row-2 > * { flex: 1; }
+.field-row-2 label { display: block; font-size: 11px; color: #999; margin-bottom: 2px; }
+.bg-input-row { display: flex; gap: 4px; align-items: flex-end; margin-bottom: 6px; }
+.bg-input-row input { flex: 1; }
+.bg-input-row button { flex-shrink: 0; padding: 0 8px; font-size: 11px; }
+#slotListWrap { flex: 1; overflow-y: auto; padding: 4px; }
+.slot-entry {
+    background: #2c2c2c;
+    border: 1px solid #3a3a3a;
+    border-radius: 3px;
+    padding: 5px 8px;
+    margin-bottom: 3px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    user-select: none;
+}
+.slot-entry:hover  { background: #333; }
+.slot-entry.active { border-color: #0080ff; background: #172a40; }
+.slot-entry .se-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.slot-entry .se-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slot-entry .se-del {
+    background: none; border: none; color: #844;
+    cursor: pointer; padding: 0 2px; font-size: 13px; height: auto; line-height: 1;
+}
+.slot-entry .se-del:hover { color: #f55; background: none; }
+#canvasWrap {
+    flex: 1; overflow: auto; background: #111;
+    display: flex; align-items: flex-start; justify-content: flex-start;
+    padding: 16px; position: relative;
+}
+#canvas {
+    position: relative; background: #2a2a2a; flex-shrink: 0; overflow: hidden;
+    box-shadow: 0 0 0 1px #555, 0 4px 20px rgba(0,0,0,0.6);
+}
+#canvas.mode-add { cursor: crosshair; }
+#bgImg {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    object-fit: cover; pointer-events: none; user-select: none; display: none;
+}
+#gridOverlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; opacity: 0; transition: opacity 0.2s;
+    background-image:
+        linear-gradient(to right,  rgba(255,255,255,0.04) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+}
+#canvas:hover #gridOverlay { opacity: 1; }
+.pf {
+    position: absolute;
+    border: 1px dashed rgba(255,255,255,0.4);
+    background: rgba(0,80,200,0.12);
+    cursor: move; user-select: none; overflow: hidden; border-radius: 2px;
+    display: flex; align-items: center; transition: background 0.1s, border-color 0.1s;
+}
+.pf:hover  { border-color: rgba(0,160,255,0.8); background: rgba(0,120,255,0.2); }
+.pf.active { border: 1px solid #0af; background: rgba(0,160,255,0.18); }
+.pf .pf-preview {
+    position: absolute; inset: 0; display: flex; align-items: center;
+    pointer-events: none; padding: 0 6px; overflow: hidden; white-space: nowrap;
+}
+.pf .pf-name-badge {
+    position: absolute; top: 1px; left: 3px;
+    font-size: 9px; color: rgba(255,255,255,0.5);
+    pointer-events: none; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; max-width: 90%; line-height: 1;
+}
+.pf .resize-handle {
+    position: absolute; bottom: 0; right: 0;
+    width: 10px; height: 10px; background: #0af;
+    cursor: se-resize; opacity: 0; transition: opacity 0.15s;
+    border-radius: 2px 0 0 0;
+}
+.pf:hover .resize-handle,
+.pf.active .resize-handle { opacity: 1; }
+#coords {
+    position: fixed; bottom: 8px; right: 12px;
+    font-size: 10px; color: #555; pointer-events: none;
+}
+#tabItems  { padding: 16px; overflow: hidden; }
+#tabPrices { padding: 16px; overflow: hidden; }
+#tabItems table, #tabPrices table {
+    width: 100%; border-collapse: collapse; font-size: 12px;
+}
+#tabItems th, #tabPrices th {
+    text-align: left; color: #888; font-weight: normal;
+    padding: 4px 6px; border-bottom: 1px solid #333;
+}
+#tabItems td, #tabPrices td {
+    padding: 4px 6px; border-bottom: 1px solid #2a2a2a; vertical-align: middle;
+}
+#tabItems tr:hover td, #tabPrices tr:hover td { background: #252525; }
+#tabItems input[type=text] { width: 100%; }
+#tabPrices input[type=number] { width: 90px; }
+#tabPrices input[type=text]   { width: 130px; }
+/* Modal */
+#modalOverlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7); z-index: 1000;
+    align-items: center; justify-content: center;
+}
+#modalOverlay.open { display: flex; }
+#modal {
+    background: #2a2a2a; border: 1px solid #444;
+    border-radius: 6px; padding: 20px 24px;
+    min-width: 340px; max-width: 520px; width: 90%;
+}
+#modal h2 { font-size: 14px; margin-bottom: 14px; color: #fff; }
+#modal .field-row { margin-bottom: 10px; }
+#modal label { font-size: 12px; color: #aaa; display: block; margin-bottom: 3px; }
+#modal input[type=text], #modal select { width: 100%; }
+#modal .modal-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+/* Library picker modal */
+#libModal {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.8); z-index: 2000;
+    align-items: flex-start; justify-content: center;
+    padding-top: 40px;
+}
+#libModal.open { display: flex; }
+#libModalInner {
+    background: #2a2a2a; border: 1px solid #444; border-radius: 6px;
+    width: 860px; max-width: 95vw; max-height: 80vh;
+    display: flex; flex-direction: column;
+}
+#libModalInner h2 { font-size: 14px; color: #fff; padding: 14px 16px; border-bottom: 1px solid #444; flex-shrink: 0; }
+#libSearch {
+    padding: 10px 16px; border-bottom: 1px solid #3a3a3a;
+    display: flex; gap: 8px; flex-shrink: 0; align-items: center;
+}
+#libSearch input { flex: 1; }
+#libGrid {
+    flex: 1; overflow-y: auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
+    padding: 12px;
+}
+.lib-thumb {
+    background: #333; border: 2px solid #3a3a3a; border-radius: 4px;
+    cursor: pointer; overflow: hidden; aspect-ratio: 16/9;
+    display: flex; align-items: center; justify-content: center;
+    position: relative; transition: border-color 0.15s;
+}
+.lib-thumb:hover { border-color: #0080ff; }
+.lib-thumb img {
+    width: 100%; height: 100%; object-fit: cover;
+    display: block;
+}
+.lib-thumb .lib-name {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: rgba(0,0,0,0.7); font-size: 10px; color: #ddd;
+    padding: 3px 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#libPager {
+    padding: 10px 16px; border-top: 1px solid #3a3a3a;
+    display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+    font-size: 12px; color: #888;
+}
+#libModalInner .modal-btns { padding: 10px 16px; border-top: 1px solid #3a3a3a; display: flex; justify-content: flex-end; flex-shrink: 0; }
+/* Multi-select & alignment */
+#rubberBand { position:absolute;border:1px dashed #0af;background:rgba(0,160,255,0.08);pointer-events:none; }
+.align-group { display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin-bottom:4px; }
+.align-group.two-col { grid-template-columns:1fr 1fr; }
+.align-btn { font-size:10px;padding:0 5px;height:24px; }
+#multiSelectMsg { font-size:11px;color:#7af;padding:4px 10px 2px;font-style:italic;line-height:1.4; }
+/* Field type badges in slot list */
+.se-type { font-size:9px;padding:1px 4px;border-radius:2px;flex-shrink:0;font-weight:bold;letter-spacing:0.03em; }
+.se-type-price { background:#1a3d1a;color:#5d5; }
+.se-type-name  { background:#1a2d4a;color:#5af; }
+/* ── Scheduler tab ────────────────────────────────────────── */
+#tabScheduler { position: relative; overflow: hidden; }
+#schedInner   { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 8px 16px 16px; overflow: hidden; }
+.sched-store { background:#222;border:1px solid #333;border-radius:5px;margin-bottom:14px;overflow:hidden; }
+.sched-store-hdr { display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:#2c2c2c;border-bottom:1px solid #333; }
+.sched-store-name { font-size:13px;font-weight:bold;color:#fff; }
+.sched-boards { padding:0; }
+.sched-board { border-top:1px solid #2a2a2a; }
+.sched-board:first-child { border-top:none; }
+.sched-board-hdr { display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:#1e1e1e; }
+.sched-board-name { font-size:12px;font-weight:bold;color:#ccc; }
+.sched-board-display { font-size:10px;color:#555;margin-top:1px; }
+.sched-board-theme { font-size:11px;color:#888;margin-top:2px; }
+.sched-board-theme strong { color:#bbb; }
+.sched-board-theme em { color:#9cf;font-style:normal; }
+.sched-row { display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 14px 6px 28px;border-top:1px solid #252525;font-size:11px; }
+.sched-row.applied { background:#14201a; }
+.sched-row.live    { background:#201818; }
+.sched-row.pending { background:#18182a; }
+.sched-badge { font-size:9px;font-weight:bold;letter-spacing:0.05em;padding:2px 5px;border-radius:2px;flex-shrink:0; }
+.sched-badge.applied { background:#1a4030;color:#4db; }
+.sched-badge.live    { background:#3a2020;color:#f77; }
+.sched-badge.pending { background:#1a2040;color:#7af; }
+.sched-row-desc  { flex:1;color:#ddd;min-width:100px; }
+.sched-row-date  { color:#888;white-space:nowrap; }
+.sched-row-scope { color:#555;font-style:italic;font-size:10px; }
+.sched-row-notes { color:#666;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+/* ── Bulk scheduler ────────────────────────────────────────── */
+.bulk-card { background:#1e1e1e;border:1px solid #333;border-radius:5px;margin-top:20px;overflow:hidden; }
+.bulk-card-hdr { display:flex;align-items:baseline;gap:10px;padding:9px 14px;background:#252525;border-bottom:1px solid #333; }
+.bulk-card-title { font-size:13px;font-weight:bold;color:#fff; }
+.bulk-card-sub { font-size:10px;color:#666; }
+.bulk-card-body { padding:14px; }
+.bulk-filter-row { display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;color:#888; }
+.bulk-filter-row select { flex:1;max-width:260px; }
+.bulk-board-list { border:1px solid #2e2e2e;border-radius:3px;max-height:220px;overflow-y:auto;background:#191919;margin-bottom:12px; }
+.bulk-board-list-empty { padding:10px 12px;font-size:11px;color:#555;font-style:italic; }
+.bulk-board-item { display:flex;align-items:center;gap:10px;padding:6px 12px;border-bottom:1px solid #252525;cursor:pointer; }
+.bulk-board-item:last-child { border-bottom:none; }
+.bulk-board-item:hover { background:#222; }
+.bulk-board-item input[type=checkbox] { width:14px;height:14px;flex-shrink:0;cursor:pointer;accent-color:#4db; }
+.bulk-board-label { flex:1;min-width:0; }
+.bulk-board-name { font-size:11px;font-weight:bold;color:#ccc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.bulk-board-info { font-size:10px;color:#555; }
+.bulk-board-theme-badge { font-size:9px;background:#1a2040;color:#7af;border-radius:2px;padding:1px 5px;white-space:nowrap;flex-shrink:0; }
+.bulk-to-grid { display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px; }
+.bulk-notes-row { margin-bottom:12px; }
+.bulk-actions { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+.bulk-sel-count { font-size:11px;color:#555;margin-left:4px; }
+/* ── Price schedule section ─────────────────────────────────── */
+#priceSchedSection { margin-top:22px;display:none; }
+#priceSchedSection h3 { font-size:12px;color:#aaa;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px; }
+#priceSchedSection table { width:100%;border-collapse:collapse;font-size:12px; }
+#priceSchedSection th { text-align:left;color:#666;font-weight:normal;padding:4px 6px;border-bottom:1px solid #333; }
+#priceSchedSection td { padding:4px 6px;border-bottom:1px solid #252525;vertical-align:middle; }
+#priceSchedSection tr:hover td { background:#252525; }
+.ps-badge { font-size:9px;font-weight:bold;letter-spacing:0.05em;padding:2px 5px;border-radius:2px; }
+.ps-badge.live    { background:#1a4020;color:#5d5; }
+.ps-badge.pending { background:#1a2040;color:#7af; }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <h1>🍔 MenuBoard Theme Editor</h1>
+  <span class="tb-sep">|</span>
+  <label style="font-size:11px;color:#888">Theme:</label>
+  <select id="themeSelect" style="width:180px" onchange="onThemeChange(this.value)">
+    <option value="">— select —</option>
+  </select>
+  <button onclick="showModal('new-theme')">+ New</button>
+  <button class="grey" onclick="duplicateTheme()" id="btnDuplicate" disabled>Duplicate</button>
+  <button class="red"  onclick="deleteTheme()"    id="btnDelete"    disabled>Delete</button>
+  <span class="tb-sep">|</span>
+  <label style="font-size:11px;color:#888">Canvas:</label>
+  <select id="resolutionSelect" onchange="applyResolution()" style="width:150px">
+    <option value="1920x1080">1920×1080 Landscape</option>
+    <option value="1080x1920">1080×1920 Portrait</option>
+    <option value="1280x720">1280×720</option>
+    <option value="custom">Custom…</option>
+  </select>
+  <button class="green" onclick="saveTheme()" id="btnSave" disabled>💾 Save Theme</button>
+  <span id="statusMsg"></span>
+</div>
+
+<div id="tabs">
+  <div class="tab active" data-tab="editor" onclick="switchTab('editor')">Theme Editor</div>
+  <div class="tab"        data-tab="items"  onclick="switchTab('items')">Menu Items</div>
+  <div class="tab"        data-tab="prices"     onclick="switchTab('prices')">Store Prices</div>
+  <div class="tab"        data-tab="scheduler"  onclick="switchTab('scheduler')">Scheduler</div>
+</div>
+
+<div id="main">
+
+  <!-- EDITOR TAB -->
+  <div id="tabEditor" style="display:flex;flex:1;overflow:hidden">
+    <div id="panel">
+
+      <div class="panel-section">
+        <h3>Theme Settings</h3>
+        <div class="field-row">
+          <label>Theme Name</label>
+          <input type="text" id="pThemeName" placeholder="e.g. StandardBoard_v1" oninput="markDirty()">
+        </div>
+        <div class="field-row">
+          <label>Background Image</label>
+          <div class="bg-input-row">
+            <input type="text" id="pBgUrl" placeholder="URL or pick from library" oninput="onBgChange()">
+            <button class="grey" onclick="openLibPicker()" title="Pick from Xibo library">📂</button>
+          </div>
+          <div id="bgPreviewWrap" style="display:none;margin-top:4px">
+            <img id="bgThumb" src="" alt="" style="width:100%;border-radius:3px;border:1px solid #444;max-height:80px;object-fit:cover">
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h3>Add Field</h3>
+        <div class="field-row">
+          <label>Field Type</label>
+          <select id="pNewType" style="width:100%">
+            <option value="price">Price</option>
+            <option value="name">Item Name</option>
+          </select>
+        </div>
+        <div class="field-row">
+          <label>Concept</label>
+          <select id="pFilterConcept" style="width:100%" onchange="onPanelConceptChange()">
+            <option value="">All Concepts</option>
+          </select>
+        </div>
+        <div class="field-row">
+          <label>Category</label>
+          <select id="pFilterCat" style="width:100%" onchange="filterPanelItems()">
+            <option value="">All Categories</option>
+          </select>
+        </div>
+        <div class="field-row">
+          <input type="text" id="pFilterSearch" placeholder="Search items…" oninput="filterPanelItems()" style="width:100%">
+        </div>
+        <div class="field-row">
+          <label>Menu Item</label>
+          <select id="pNewItem" style="width:100%"></select>
+        </div>
+        <button onclick="startAddMode()" style="width:100%" id="btnAddSlot" disabled>
+          + Click Canvas to Place
+        </button>
+      </div>
+
+      <div class="panel-section" style="padding-bottom:4px">
+        <h3>Price Fields (<span id="slotCount">0</span>)</h3>
+      </div>
+
+      <div id="alignSection" class="panel-section" style="display:none">
+        <h3>Align — <span id="alignCount">0</span> selected</h3>
+        <div class="align-group">
+          <button class="grey align-btn" onclick="alignSlots('left')"    title="Align left edges">← Left</button>
+          <button class="grey align-btn" onclick="alignSlots('centerH')" title="Center horizontally">↔ Center</button>
+          <button class="grey align-btn" onclick="alignSlots('right')"   title="Align right edges">Right →</button>
+        </div>
+        <div class="align-group">
+          <button class="grey align-btn" onclick="alignSlots('top')"     title="Align top edges">↑ Top</button>
+          <button class="grey align-btn" onclick="alignSlots('centerV')" title="Center vertically">↕ Middle</button>
+          <button class="grey align-btn" onclick="alignSlots('bottom')"  title="Align bottom edges">Bottom ↓</button>
+        </div>
+        <div class="align-group two-col">
+          <button class="grey align-btn" id="btnDistH" onclick="alignSlots('distH')" title="Space evenly horizontal (3+ items)" disabled>Space H</button>
+          <button class="grey align-btn" id="btnDistV" onclick="alignSlots('distV')" title="Space evenly vertical (3+ items)"   disabled>Space V</button>
+        </div>
+        <div class="align-group">
+          <button class="grey align-btn" onclick="alignSlots('matchW')"  title="Match width to first selected">= Width</button>
+          <button class="grey align-btn" onclick="alignSlots('matchH')"  title="Match height to first selected">= Height</button>
+          <button class="grey align-btn" onclick="alignSlots('matchWH')" title="Match size to first selected">= Both</button>
+        </div>
+      </div>
+
+      <div id="slotListWrap"></div>
+
+      <div id="multiSelectMsg" style="display:none"></div>
+
+      <div id="slotProps" class="panel-section" style="display:none">
+        <h3>Selected Field</h3>
+        <div class="field-row-2">
+          <div><label>X (px)</label><input type="number" id="spX" oninput="onPropChange()"></div>
+          <div><label>Y (px)</label><input type="number" id="spY" oninput="onPropChange()"></div>
+        </div>
+        <div class="field-row-2">
+          <div><label>Width</label><input type="number" id="spW" oninput="onPropChange()"></div>
+          <div><label>Height</label><input type="number" id="spH" oninput="onPropChange()"></div>
+        </div>
+        <div class="field-row-2">
+          <div><label>Font Size (px)</label><input type="number" id="spFontSize" min="6" max="300" oninput="onPropChange()"></div>
+          <div><label>Color</label><input type="color" id="spColor" oninput="onPropChange()" style="width:100%"></div>
+        </div>
+        <div class="field-row">
+          <label>Font Family</label>
+          <select id="spFontFamily" style="width:100%" oninput="onPropChange()">
+            <option value="Arial, sans-serif">Arial</option>
+            <option value="'Helvetica Neue', Helvetica, sans-serif">Helvetica Neue</option>
+            <option value="Verdana, sans-serif">Verdana</option>
+            <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+            <option value="Georgia, serif">Georgia</option>
+            <option value="'Times New Roman', Times, serif">Times New Roman</option>
+            <option value="Impact, 'Arial Narrow', sans-serif">Impact</option>
+            <option value="'Arial Black', sans-serif">Arial Black</option>
+            <option value="'Courier New', monospace">Courier New</option>
+          </select>
+        </div>
+        <div class="field-row-2">
+          <div>
+            <label>Weight</label>
+            <select id="spWeight" oninput="onPropChange()">
+              <option value="bold">Bold</option>
+              <option value="normal">Normal</option>
+            </select>
+          </div>
+          <div>
+            <label>Style</label>
+            <select id="spStyle" oninput="onPropChange()">
+              <option value="normal">Normal</option>
+              <option value="italic">Italic</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-row">
+          <label>Align</label>
+          <select id="spAlign" style="width:100%" oninput="onPropChange()">
+            <option value="left">Left</option>
+            <option value="center">Center</option>
+            <option value="right">Right</option>
+          </select>
+        </div>
+      </div>
+
+    </div>
+
+    <div id="canvasWrap">
+      <div id="canvas">
+        <img id="bgImg" src="" alt="">
+        <div id="gridOverlay"></div>
+      </div>
+      <div id="coords">0, 0</div>
+    </div>
+  </div>
+
+  <!-- ITEMS TAB -->
+  <div id="tabItems" style="display:none;flex:1;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-shrink:0;flex-wrap:wrap">
+      <h2 style="font-size:14px;color:#fff">Menu Items</h2>
+      <button onclick="showModal('new-item')">+ Add Item</button>
+      <button class="green" onclick="saveAllItems()">💾 Save All</button>
+      <button class="grey" onclick="loadItems()">↻ Refresh</button>
+      <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:4px;cursor:pointer">
+        <input type="checkbox" id="showInactive" onchange="loadItems()"> Show inactive
+      </label>
+      <span class="tb-sep">|</span>
+      <label style="font-size:11px;color:#888">Concept:</label>
+      <select id="itemFilterConcept" style="width:150px" onchange="onItemConceptChange()">
+        <option value="">All Concepts</option>
+      </select>
+      <label style="font-size:11px;color:#888">Category:</label>
+      <select id="itemFilterCat" style="width:130px" onchange="renderItemsTab()">
+        <option value="">All Categories</option>
+      </select>
+      <input type="text" id="itemFilterSearch" placeholder="Search…" style="width:120px" oninput="renderItemsTab()">
+    </div>
+    <div style="flex:1;overflow-y:auto">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:30px">#</th>
+            <th style="width:130px">Concept</th>
+            <th>Name</th>
+            <th style="width:110px">Category</th>
+            <th style="width:55px">Active</th>
+            <th style="width:140px"></th>
+          </tr>
+        </thead>
+        <tbody id="itemTbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <datalist id="categoryOptions"></datalist>
+
+  <!-- PRICES TAB -->
+  <div id="tabPrices" style="display:none;flex:1;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-shrink:0;flex-wrap:wrap">
+      <h2 style="font-size:14px;color:#fff">Store Prices</h2>
+      <label style="font-size:12px;color:#888">Store:</label>
+      <select id="priceStoreSelect" style="width:180px" onchange="loadPrices()">
+        <option value="">— select store —</option>
+      </select>
+      <span class="tb-sep">|</span>
+      <select id="priceCatFilter" style="width:140px;font-size:12px" onchange="renderPricesTable()">
+        <option value="">— all categories —</option>
+      </select>
+      <input id="priceSearch" type="text" placeholder="Search item…" style="width:140px" oninput="renderPricesTable()">
+      <span class="tb-sep">|</span>
+      <button class="green" onclick="savePrices()" id="btnSavePrices" disabled>💾 Save Prices</button>
+      <button class="grey"  onclick="loadPrices()">↻ Refresh</button>
+    </div>
+    <div style="flex:1;overflow-y:auto">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:30px">#</th>
+            <th>Item</th>
+            <th style="width:110px">Category</th>
+            <th style="width:100px">Price ($)</th>
+            <th style="width:150px">Label (override)</th>
+            <th style="width:70px">Available</th>
+            <th style="width:36px"></th>
+          </tr>
+        </thead>
+        <tbody id="priceTbody"></tbody>
+      </table>
+
+      <div id="priceSchedSection">
+        <h3>Scheduled Price Changes</h3>
+        <table>
+          <thead>
+            <tr>
+              <th style="width:60px"></th>
+              <th>Item</th>
+              <th style="width:100px">Category</th>
+              <th style="width:100px">New Price</th>
+              <th style="width:150px">New Label</th>
+              <th style="width:70px">Available</th>
+              <th style="width:160px">Effective</th>
+              <th style="width:150px">Notes</th>
+              <th style="width:60px"></th>
+            </tr>
+          </thead>
+          <tbody id="priceSchedTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCHEDULER TAB -->
+  <div id="tabScheduler" style="display:none;flex:1">
+    <div id="schedInner">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-shrink:0;flex-wrap:wrap">
+        <h2 style="font-size:14px;color:#fff">Theme Schedule</h2>
+        <button class="grey" onclick="loadScheduler()">↻ Refresh</button>
+        <span class="tb-sep">|</span>
+        <label style="font-size:11px;color:#888">View by:</label>
+        <button id="schedViewStoreBtn" class="grey" onclick="setSchedView('store')" style="font-size:11px;padding:0 8px">Store</button>
+        <button id="schedViewThemeBtn" class="grey" onclick="setSchedView('theme')" style="font-size:11px;padding:0 8px">Theme</button>
+      </div>
+      <div id="schedulerContent" style="flex:1;min-height:0;overflow-y:auto">
+        <p style="color:#555;font-style:italic">Click ↻ Refresh to load the schedule.</p>
+      </div>
+      <div id="bulkSchedSection" style="display:none;flex-shrink:0;max-height:45vh;overflow-y:auto;border-top:2px solid #2a2a2a;padding-top:8px;margin-top:8px"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- GENERAL MODAL -->
+<div id="modalOverlay" onclick="hideModal(event)">
+  <div id="modal">
+    <h2 id="modalTitle"></h2>
+    <div id="modalBody"></div>
+    <div class="modal-btns">
+      <button class="grey"  onclick="hideModal()">Cancel</button>
+      <button class="green" onclick="modalConfirmAction()">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- LIBRARY PICKER MODAL -->
+<div id="libModal" onclick="closeLibPickerOutside(event)">
+  <div id="libModalInner">
+    <h2>📂 Pick Background from Xibo Library</h2>
+    <div id="libSearch">
+      <input type="text" id="libSearchInput" placeholder="Search images…" oninput="debounceLibSearch()">
+      <button class="grey" onclick="loadLibImages(0)">Search</button>
+    </div>
+    <div id="libGrid"></div>
+    <div id="libPager">
+      <button class="grey" id="libPrevBtn" onclick="libPage(-1)" disabled>← Prev</button>
+      <span id="libPageInfo">—</span>
+      <button class="grey" id="libNextBtn" onclick="libPage(1)"  disabled>Next →</button>
+    </div>
+    <div class="modal-btns">
+      <button class="grey" onclick="closeLibPicker()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+const API = 'api.php';
+
+let themes         = [];
+let items          = [];
+let slots          = [];
+let primarySlotId  = null;      // slot shown in the props panel
+let selectedIds    = new Set(); // all currently selected slot ids
+let currentThemeId = null;
+let isDirty        = false;
+let canvasW        = 1920;
+let canvasH        = 1080;
+let scale          = 1;
+let addMode        = false;
+let dragState      = null;
+let resizeState    = null;
+let rubberState    = null;
+let modalAction    = null;
+
+// Library picker state
+let libStart       = 0;
+let libLength      = 20;
+let libTotal       = 0;
+let libSearchTimer = null;
+
+const PALETTE = ['#f87','#f4a','#af8','#8af','#fa8','#8fa','#88f','#f88','#ff8','#8ff'];
+let paletteIdx = 0;
+function nextColor() { return PALETTE[paletteIdx++ % PALETTE.length]; }
+
+// ── SELECTION HELPERS ─────────────────────────────────────────────────────────
+
+function selectOne(id) {
+    selectedIds.clear();
+    if (id) selectedIds.add(id);
+    primarySlotId = id || null;
+    updateSlotHighlights();
+    updateSlotPropsPanel();
+    updateAlignToolbar();
+}
+
+function toggleSelect(id) {
+    if (selectedIds.has(id)) {
+        selectedIds.delete(id);
+        if (primarySlotId === id)
+            primarySlotId = selectedIds.size ? [...selectedIds][selectedIds.size - 1] : null;
+    } else {
+        selectedIds.add(id);
+        primarySlotId = id;
+    }
+    updateSlotHighlights();
+    updateSlotPropsPanel();
+    updateAlignToolbar();
+}
+
+function clearSelection() {
+    selectedIds.clear();
+    primarySlotId = null;
+    updateSlotHighlights();
+    updateSlotPropsPanel();
+    updateAlignToolbar();
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+
+async function init() {
+    setupCanvasEvents();
+    applyResolution();
+    await Promise.all([loadThemes(), loadItems(), loadStores()]);
+}
+
+// ── TABS ──────────────────────────────────────────────────────────────────────
+
+function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+    document.getElementById('tabEditor').style.display    = name === 'editor'    ? 'flex' : 'none';
+    document.getElementById('tabItems').style.display     = name === 'items'     ? 'flex' : 'none';
+    document.getElementById('tabPrices').style.display    = name === 'prices'    ? 'flex' : 'none';
+    document.getElementById('tabScheduler').style.display = name === 'scheduler' ? 'flex' : 'none';
+    if (name === 'items')     loadItems();
+    if (name === 'prices')    loadPrices();
+    if (name === 'scheduler') loadScheduler();
+}
+
+// ── THEMES ────────────────────────────────────────────────────────────────────
+
+async function loadThemes() {
+    try {
+        const res = await fetch(`${API}?action=themes`);
+        themes    = await res.json();
+        const sel = document.getElementById('themeSelect');
+        const cur = sel.value;
+        sel.innerHTML = '<option value="">— select theme —</option>';
+        themes.forEach(t => {
+            const o = document.createElement('option');
+            o.value = t.themeId;
+            o.textContent = t.themeName;
+            sel.appendChild(o);
+        });
+        if (cur) sel.value = cur;
+    } catch(e) { setStatus('Failed to load themes', 'err'); }
+}
+
+async function onThemeChange(id) {
+    if (!id) return;
+    if (isDirty && !confirm('You have unsaved changes. Discard them?')) {
+        document.getElementById('themeSelect').value = currentThemeId || '';
+        return;
+    }
+    await loadTheme(id);
+}
+
+async function loadTheme(id) {
+    try {
+        const res  = await fetch(`${API}?action=theme&id=${id}`);
+        const data = await res.json();
+        if (data.error) { setStatus(data.error, 'err'); return; }
+        currentThemeId = id;
+        paletteIdx     = 0;
+        slots = (data.layoutJson || []).map(s => ({ ...s, _color: nextColor() }));
+        document.getElementById('pThemeName').value = data.themeName     || '';
+        document.getElementById('pBgUrl').value     = data.backgroundUrl || '';
+        updateBackground();
+        document.getElementById('btnAddSlot').disabled   = false;
+        document.getElementById('btnSave').disabled      = false;
+        document.getElementById('btnDuplicate').disabled = false;
+        document.getElementById('btnDelete').disabled    = false;
+        clearSelection();
+        isDirty = false;
+        renderCanvas();
+        setStatus('Loaded: ' + data.themeName, 'ok');
+    } catch(e) { setStatus('Failed to load theme: ' + e.message, 'err'); }
+}
+
+async function saveTheme() {
+    if (!currentThemeId) { setStatus('Select a theme first', 'err'); return; }
+
+    const btn = document.getElementById('btnSave');
+    btn.disabled   = true;
+    btn.textContent = '⏳ Saving…';
+
+    const payload = {
+        themeName:     document.getElementById('pThemeName').value.trim(),
+        backgroundUrl: document.getElementById('pBgUrl').value.trim(),
+        layoutJson:    slots.map(({ _color, ...clean }) => clean),
+    };
+
+    try {
+        const res  = await fetch(`${API}?action=theme&id=${currentThemeId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+            isDirty = false;
+            const pub = data.widgetsUpdated > 0
+                ? ` — ${data.widgetsUpdated} board(s) on ${data.publishedLayouts} layout(s) notified`
+                : '';
+            setStatus('✔ Theme saved' + pub, 'ok');
+            await loadThemes();
+            document.getElementById('themeSelect').value = currentThemeId;
+        } else {
+            setStatus('Save failed: ' + (data.error || JSON.stringify(data)), 'err');
+        }
+    } catch(e) {
+        setStatus('Save error: ' + e.message, 'err');
+    } finally {
+        btn.disabled    = false;
+        btn.textContent = '💾 Save Theme';
+    }
+}
+
+async function deleteTheme() {
+    if (!currentThemeId) return;
+    const name = document.getElementById('pThemeName').value || '#' + currentThemeId;
+    if (!confirm(`Delete theme "${name}"? This cannot be undone.`)) return;
+    await fetch(`${API}?action=theme&id=${currentThemeId}`, { method: 'DELETE' });
+    currentThemeId = null;
+    slots = [];
+    isDirty = false;
+    clearSelection();
+    document.getElementById('pThemeName').value     = '';
+    document.getElementById('pBgUrl').value         = '';
+    document.getElementById('bgImg').style.display  = 'none';
+    document.getElementById('bgPreviewWrap').style.display = 'none';
+    document.getElementById('btnSave').disabled      = true;
+    document.getElementById('btnDuplicate').disabled = true;
+    document.getElementById('btnDelete').disabled    = true;
+    document.getElementById('btnAddSlot').disabled   = true;
+    renderCanvas();
+    await loadThemes();
+    setStatus('Theme deleted', 'info');
+}
+
+async function duplicateTheme() {
+    if (!currentThemeId) return;
+    const src  = themes.find(t => t.themeId == currentThemeId);
+    const name = prompt('Name for duplicate:', (src?.themeName || 'Theme') + ' (copy)');
+    if (!name) return;
+    const res  = await fetch(`${API}?action=duplicate&id=${currentThemeId}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ themeName: name }),
+    });
+    const data = await res.json();
+    if (data.themeId) {
+        await loadThemes();
+        document.getElementById('themeSelect').value = data.themeId;
+        await loadTheme(data.themeId);
+        setStatus('Duplicated as: ' + name, 'ok');
+    }
+}
+
+// ── BACKGROUND ────────────────────────────────────────────────────────────────
+
+function onBgChange() { updateBackground(); markDirty(); }
+
+function updateBackground() {
+    const url   = document.getElementById('pBgUrl').value.trim();
+    const img   = document.getElementById('bgImg');
+    const thumb = document.getElementById('bgThumb');
+    const wrap  = document.getElementById('bgPreviewWrap');
+
+    if (url) {
+        img.src = url;
+        img.style.display = 'block';
+        img.onerror = () => {
+            img.style.display = 'none';
+            wrap.style.display = 'none';
+            setStatus('Image failed to load — check the URL', 'err');
+        };
+        img.onload = () => {
+            thumb.src = url;
+            wrap.style.display = 'block';
+        };
+    } else {
+        img.src = '';
+        img.style.display  = 'none';
+        wrap.style.display = 'none';
+    }
+}
+
+// ── LIBRARY PICKER ────────────────────────────────────────────────────────────
+
+function openLibPicker() {
+    libStart = 0;
+    document.getElementById('libSearchInput').value = '';
+    document.getElementById('libModal').classList.add('open');
+    loadLibImages(0);
+}
+
+function closeLibPicker() {
+    document.getElementById('libModal').classList.remove('open');
+}
+
+function closeLibPickerOutside(e) {
+    if (e.target === document.getElementById('libModal')) closeLibPicker();
+}
+
+function debounceLibSearch() {
+    clearTimeout(libSearchTimer);
+    libSearchTimer = setTimeout(() => loadLibImages(0), 400);
+}
+
+async function loadLibImages(start) {
+    libStart = start;
+    const search = document.getElementById('libSearchInput').value.trim();
+    const grid   = document.getElementById('libGrid');
+    grid.innerHTML = '<div style="color:#666;padding:20px;grid-column:1/-1">Loading…</div>';
+
+    try {
+        const url = `${API}?action=library&start=${start}&length=${libLength}&search=${encodeURIComponent(search)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        libTotal = data.total || 0;
+        grid.innerHTML = '';
+
+        if (!data.images || data.images.length === 0) {
+            grid.innerHTML = '<div style="color:#666;padding:20px;grid-column:1/-1">No images found</div>';
+        } else {
+            data.images.forEach(img => {
+                const div = document.createElement('div');
+                div.className = 'lib-thumb';
+                div.innerHTML = `
+                    <img src="${esc(img.url)}" alt="${esc(img.name)}"
+                         onerror="this.style.display='none';this.nextElementSibling.previousElementSibling.textContent='📷'">
+                    <div class="lib-name">${esc(img.name)}</div>
+                `;
+                div.addEventListener('click', () => selectLibImage(img));
+                grid.appendChild(div);
+            });
+        }
+
+        // Update pager
+        const info    = document.getElementById('libPageInfo');
+        const prevBtn = document.getElementById('libPrevBtn');
+        const nextBtn = document.getElementById('libNextBtn');
+        const end     = Math.min(start + libLength, libTotal);
+        info.textContent  = libTotal > 0 ? `${start + 1}–${end} of ${libTotal}` : 'No results';
+        prevBtn.disabled  = start <= 0;
+        nextBtn.disabled  = end >= libTotal;
+
+    } catch(e) {
+        grid.innerHTML = `<div style="color:#d55;padding:20px;grid-column:1/-1">Error: ${e.message}</div>`;
+    }
+}
+
+function libPage(dir) {
+    const newStart = libStart + (dir * libLength);
+    if (newStart < 0 || newStart >= libTotal) return;
+    loadLibImages(newStart);
+}
+
+function selectLibImage(img) {
+    // Use the download URL as the background
+    document.getElementById('pBgUrl').value = img.url;
+    updateBackground();
+    markDirty();
+    closeLibPicker();
+    setStatus('Background set: ' + img.name, 'ok');
+}
+
+// ── CANVAS & RESOLUTION ───────────────────────────────────────────────────────
+
+function applyResolution() {
+    const val = document.getElementById('resolutionSelect').value;
+    if (val === 'custom') {
+        const w = parseInt(prompt('Canvas width:', canvasW));
+        const h = parseInt(prompt('Canvas height:', canvasH));
+        if (w > 0 && h > 0) { canvasW = w; canvasH = h; }
+        document.getElementById('resolutionSelect').value = canvasW + 'x' + canvasH;
+    } else {
+        const p = val.split('x');
+        canvasW = parseInt(p[0]);
+        canvasH = parseInt(p[1]);
+    }
+    recalcScale();
+    renderCanvas();
+}
+
+function recalcScale() {
+    const wrap = document.getElementById('canvasWrap');
+    const maxW = wrap.clientWidth  - 32;
+    const maxH = wrap.clientHeight - 32;
+    scale = Math.max(0.1, Math.min(maxW / canvasW, maxH / canvasH, 1));
+    const canvas = document.getElementById('canvas');
+    canvas.style.width  = (canvasW * scale) + 'px';
+    canvas.style.height = (canvasH * scale) + 'px';
+}
+
+window.addEventListener('resize', () => { recalcScale(); renderCanvas(); });
+
+// ── CANVAS EVENTS ─────────────────────────────────────────────────────────────
+
+function setupCanvasEvents() {
+    const canvas = document.getElementById('canvas');
+    const coords = document.getElementById('coords');
+
+    canvas.addEventListener('mousemove', e => {
+        const r  = canvas.getBoundingClientRect();
+        const cx = Math.round((e.clientX - r.left) / scale);
+        const cy = Math.round((e.clientY - r.top)  / scale);
+        coords.textContent = `${cx}, ${cy}`;
+
+        if (dragState) {
+            const dx      = Math.round((e.clientX - dragState.startX) / scale);
+            const dy      = Math.round((e.clientY - dragState.startY) / scale);
+            const newX    = Math.max(0, Math.min(canvasW - dragState.slot.w, dragState.origX + dx));
+            const newY    = Math.max(0, Math.min(canvasH - dragState.slot.h, dragState.origY + dy));
+            const actualDx = newX - dragState.origX;
+            const actualDy = newY - dragState.origY;
+            dragState.slot.x = newX;
+            dragState.slot.y = newY;
+            dragState.el.style.left = (newX * scale) + 'px';
+            dragState.el.style.top  = (newY * scale) + 'px';
+            dragState.companions.forEach(c => {
+                c.slot.x = Math.max(0, Math.min(canvasW - c.slot.w, c.origX + actualDx));
+                c.slot.y = Math.max(0, Math.min(canvasH - c.slot.h, c.origY + actualDy));
+                c.el.style.left = (c.slot.x * scale) + 'px';
+                c.el.style.top  = (c.slot.y * scale) + 'px';
+            });
+            syncPropsFromSlot(dragState.slot);
+        }
+
+        if (resizeState) {
+            const dw = Math.round((e.clientX - resizeState.startX) / scale);
+            const dh = Math.round((e.clientY - resizeState.startY) / scale);
+            resizeState.slot.w = Math.max(40, resizeState.origW + dw);
+            resizeState.slot.h = Math.max(16, resizeState.origH + dh);
+            resizeState.el.style.width  = (resizeState.slot.w * scale) + 'px';
+            resizeState.el.style.height = (resizeState.slot.h * scale) + 'px';
+            syncPropsFromSlot(resizeState.slot);
+        }
+
+        if (rubberState) {
+            const rb  = document.getElementById('rubberBand');
+            const r2  = canvas.getBoundingClientRect();
+            const curX = Math.max(0, Math.min(canvasW, Math.round((e.clientX - r2.left) / scale)));
+            const curY = Math.max(0, Math.min(canvasH, Math.round((e.clientY - r2.top)  / scale)));
+            const rx = Math.min(rubberState.startX, curX);
+            const ry = Math.min(rubberState.startY, curY);
+            const rw = Math.abs(curX - rubberState.startX);
+            const rh = Math.abs(curY - rubberState.startY);
+            rubberState.rect = { x: rx, y: ry, w: rw, h: rh };
+            if (rb) {
+                rb.style.left   = (rx * scale) + 'px';
+                rb.style.top    = (ry * scale) + 'px';
+                rb.style.width  = (rw * scale) + 'px';
+                rb.style.height = (rh * scale) + 'px';
+            }
+        }
+    });
+
+    document.addEventListener('mouseup', e => {
+        if (dragState || resizeState) { dragState = null; resizeState = null; markDirty(); }
+        if (rubberState) {
+            const r = rubberState.rect;
+            if (r && (r.w > 5 || r.h > 5)) {
+                if (!e.shiftKey) selectedIds.clear();
+                slots.forEach(s => {
+                    if (rectsOverlap({ x: s.x, y: s.y, w: s.w, h: s.h }, r)) {
+                        selectedIds.add(s.id);
+                        primarySlotId = s.id;
+                    }
+                });
+                updateSlotHighlights();
+                updateSlotPropsPanel();
+                updateAlignToolbar();
+            }
+            document.getElementById('rubberBand')?.remove();
+            rubberState = null;
+        }
+    });
+
+    canvas.addEventListener('click', e => {
+        if (!addMode) return;
+        addMode = false;
+        canvas.classList.remove('mode-add');
+        document.getElementById('btnAddSlot').textContent = '+ Click Canvas to Place';
+        const r      = canvas.getBoundingClientRect();
+        const x      = Math.max(0, Math.round((e.clientX - r.left) / scale));
+        const y      = Math.max(0, Math.round((e.clientY - r.top)  / scale));
+        const itemId  = parseInt(document.getElementById('pNewItem').value);
+        const newType = document.getElementById('pNewType').value || 'price';
+        const isPrice = newType === 'price';
+        const slot    = {
+            id: 'slot_' + Date.now(), itemId,
+            type:       newType,
+            x, y, w: isPrice ? 100 : 160, h: isPrice ? 50 : 52, fontSize: 32,
+            fontFamily: 'Arial, sans-serif',
+            color:      isPrice ? '#000000' : '#ffffff',
+            fontWeight: 'bold',
+            fontStyle:  'normal',
+            textAlign:  newType === 'name' ? 'left' : 'right',
+            _color:     nextColor(),
+        };
+        slots.push(slot);
+        selectOne(slot.id);
+        renderCanvas();
+        markDirty();
+        setStatus('Field added — drag to reposition, resize from corner', 'ok');
+    });
+
+    canvas.addEventListener('mousedown', e => {
+        if (addMode) return;
+        const onEmpty = (e.target === canvas || e.target.id === 'bgImg' || e.target.id === 'gridOverlay');
+        if (onEmpty) {
+            if (!e.shiftKey) clearSelection();
+            const r  = canvas.getBoundingClientRect();
+            const sx = Math.round((e.clientX - r.left) / scale);
+            const sy = Math.round((e.clientY - r.top)  / scale);
+            rubberState = { startX: sx, startY: sy, rect: null };
+            const rb = document.createElement('div');
+            rb.id = 'rubberBand';
+            rb.style.cssText = `position:absolute;border:1px dashed #0af;background:rgba(0,160,255,0.08);pointer-events:none;left:${sx*scale}px;top:${sy*scale}px;width:0;height:0`;
+            canvas.appendChild(rb);
+            e.preventDefault();
+        }
+    });
+
+    document.addEventListener('keydown', e => {
+        const inInput = ['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName);
+
+        if (e.key === 'Escape' && addMode) {
+            addMode = false;
+            canvas.classList.remove('mode-add');
+            document.getElementById('btnAddSlot').textContent = '+ Click Canvas to Place';
+            setStatus('Add cancelled', 'info');
+        }
+
+        if (inInput) return;
+
+        if (e.key === 'Delete' && selectedIds.size > 0) {
+            [...selectedIds].forEach(id => { slots = slots.filter(s => s.id !== id); });
+            clearSelection();
+            renderCanvas();
+            markDirty();
+        }
+
+        if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+            e.preventDefault();
+            slots.forEach(s => selectedIds.add(s.id));
+            primarySlotId = slots.length ? slots[slots.length - 1].id : null;
+            updateSlotHighlights();
+            updateSlotPropsPanel();
+            updateAlignToolbar();
+        }
+
+        if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key) && selectedIds.size > 0) {
+            e.preventDefault();
+            const step = e.shiftKey ? 10 : 1;
+            const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
+            const dy = e.key === 'ArrowUp'   ? -step : e.key === 'ArrowDown'  ? step : 0;
+            slots.filter(s => selectedIds.has(s.id)).forEach(s => {
+                s.x = Math.max(0, Math.min(canvasW - s.w, s.x + dx));
+                s.y = Math.max(0, Math.min(canvasH - s.h, s.y + dy));
+            });
+            renderCanvas();
+            markDirty();
+        }
+    });
+}
+
+function rectsOverlap(a, b) {
+    return a.x < b.x + b.w && a.x + a.w > b.x &&
+           a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+// ── RENDER CANVAS ─────────────────────────────────────────────────────────────
+
+function renderCanvas() {
+    const canvas = document.getElementById('canvas');
+    canvas.querySelectorAll('.pf').forEach(el => el.remove());
+    slots.forEach(slot => canvas.appendChild(buildSlotEl(slot)));
+    rebuildSlotList();
+    updateSlotPropsPanel();
+    updateAlignToolbar();
+    document.getElementById('slotCount').textContent = slots.length;
+}
+
+function buildSlotEl(slot) {
+    const item  = items.find(i => i.itemId == slot.itemId);
+    const name  = item ? item.name : `Item #${slot.itemId}`;
+    const color = slot._color || '#8af';
+
+    const el          = document.createElement('div');
+    el.className      = 'pf' + (selectedIds.has(slot.id) ? ' active' : '');
+    el.dataset.slotId = slot.id;
+    el.style.left     = (slot.x * scale) + 'px';
+    el.style.top      = (slot.y * scale) + 'px';
+    el.style.width    = (slot.w * scale) + 'px';
+    el.style.height   = (slot.h * scale) + 'px';
+    el.style.borderColor = color + '88';
+
+    const preview     = document.createElement('div');
+    preview.className = 'pf-preview';
+    preview.style.fontSize       = (slot.fontSize * scale) + 'px';
+    preview.style.color          = slot.color      || '#fff';
+    preview.style.fontWeight     = slot.fontWeight  || 'bold';
+    preview.style.justifyContent = slot.textAlign === 'left'   ? 'flex-start'
+                                 : slot.textAlign === 'center' ? 'center'
+                                 :                               'flex-end';
+    preview.style.fontFamily = slot.fontFamily || 'Arial, sans-serif';
+    preview.style.fontStyle  = slot.fontStyle  || 'normal';
+    if (slot.type === 'name') {
+        const previewItem = items.find(i => i.itemId == slot.itemId);
+        preview.textContent = previewItem ? previewItem.name : 'Item Name';
+    } else {
+        preview.textContent = '0.00';
+    }
+
+    const badge       = document.createElement('div');
+    badge.className   = 'pf-name-badge';
+    badge.style.color = color;
+    badge.textContent = name;
+
+    const handle      = document.createElement('div');
+    handle.className  = 'resize-handle';
+    handle.style.background = color;
+
+    el.appendChild(preview);
+    el.appendChild(badge);
+    el.appendChild(handle);
+
+    el.addEventListener('mousedown', e => {
+        if (e.target === handle) return;
+        e.stopPropagation();
+        if (e.shiftKey) {
+            toggleSelect(slot.id);
+        } else {
+            if (!selectedIds.has(slot.id)) selectOne(slot.id);
+            else primarySlotId = slot.id;
+            startDrag(e, slot, el);
+        }
+    });
+
+    handle.addEventListener('mousedown', e => {
+        e.stopPropagation();
+        selectOne(slot.id);
+        startResize(e, slot, el);
+    });
+
+    return el;
+}
+
+function updateSlotHighlights() {
+    document.querySelectorAll('.pf').forEach(el =>
+        el.classList.toggle('active', selectedIds.has(el.dataset.slotId)));
+    document.querySelectorAll('.slot-entry').forEach(el =>
+        el.classList.toggle('active', selectedIds.has(el.dataset.slotId)));
+}
+
+function rebuildSlotList() {
+    const list = document.getElementById('slotListWrap');
+    list.innerHTML = '';
+    slots.forEach(slot => {
+        const item  = items.find(i => i.itemId == slot.itemId);
+        const name  = item ? item.name : `Item #${slot.itemId}`;
+        const color = slot._color || '#8af';
+        const div   = document.createElement('div');
+        div.className      = 'slot-entry' + (selectedIds.has(slot.id) ? ' active' : '');
+        div.dataset.slotId = slot.id;
+        const isName = slot.type === 'name';
+        div.innerHTML = `
+            <span class="se-dot" style="background:${color}"></span>
+            <span class="se-label">${esc(name)}</span>
+            <span class="se-type ${isName ? 'se-type-name' : 'se-type-price'}">${isName ? 'NAME' : 'PRICE'}</span>
+            <button class="se-del" title="Delete (Del key)">✕</button>
+        `;
+        div.addEventListener('click', e => {
+            if (e.target.classList.contains('se-del')) return;
+            if (e.shiftKey) toggleSelect(slot.id);
+            else selectOne(slot.id);
+        });
+        div.querySelector('.se-del').addEventListener('click', () => deleteSlot(slot.id));
+        list.appendChild(div);
+    });
+}
+
+// ── ALIGN & DISTRIBUTE ────────────────────────────────────────────────────────
+
+function updateAlignToolbar() {
+    const n       = selectedIds.size;
+    const section = document.getElementById('alignSection');
+    section.style.display = n >= 2 ? 'block' : 'none';
+    if (n >= 2) {
+        document.getElementById('alignCount').textContent = n;
+        document.getElementById('btnDistH').disabled = n < 3;
+        document.getElementById('btnDistV').disabled = n < 3;
+    }
+}
+
+function alignSlots(type) {
+    const sel = slots.filter(s => selectedIds.has(s.id));
+    if (sel.length < 2) return;
+    const primary = slots.find(s => s.id === primarySlotId) || sel[0];
+
+    switch (type) {
+        case 'left':    { const ref = Math.min(...sel.map(s => s.x));         sel.forEach(s => s.x = ref); break; }
+        case 'right':   { const ref = Math.max(...sel.map(s => s.x + s.w));   sel.forEach(s => s.x = ref - s.w); break; }
+        case 'top':     { const ref = Math.min(...sel.map(s => s.y));         sel.forEach(s => s.y = ref); break; }
+        case 'bottom':  { const ref = Math.max(...sel.map(s => s.y + s.h));   sel.forEach(s => s.y = ref - s.h); break; }
+        case 'centerH': { const ref = Math.round(sel.reduce((a, s) => a + s.x + s.w / 2, 0) / sel.length); sel.forEach(s => s.x = ref - Math.round(s.w / 2)); break; }
+        case 'centerV': { const ref = Math.round(sel.reduce((a, s) => a + s.y + s.h / 2, 0) / sel.length); sel.forEach(s => s.y = ref - Math.round(s.h / 2)); break; }
+        case 'distH': {
+            if (sel.length < 3) break;
+            sel.sort((a, b) => a.x - b.x);
+            const totalW = sel.reduce((a, s) => a + s.w, 0);
+            const span   = sel[sel.length - 1].x + sel[sel.length - 1].w - sel[0].x;
+            const gap    = (span - totalW) / (sel.length - 1);
+            let cur      = sel[0].x + sel[0].w;
+            for (let i = 1; i < sel.length - 1; i++) { sel[i].x = Math.round(cur + gap); cur = sel[i].x + sel[i].w; }
+            break;
+        }
+        case 'distV': {
+            if (sel.length < 3) break;
+            sel.sort((a, b) => a.y - b.y);
+            const totalH = sel.reduce((a, s) => a + s.h, 0);
+            const span   = sel[sel.length - 1].y + sel[sel.length - 1].h - sel[0].y;
+            const gap    = (span - totalH) / (sel.length - 1);
+            let cur      = sel[0].y + sel[0].h;
+            for (let i = 1; i < sel.length - 1; i++) { sel[i].y = Math.round(cur + gap); cur = sel[i].y + sel[i].h; }
+            break;
+        }
+        case 'matchW':  sel.forEach(s => s.w = primary.w); break;
+        case 'matchH':  sel.forEach(s => s.h = primary.h); break;
+        case 'matchWH': sel.forEach(s => { s.w = primary.w; s.h = primary.h; }); break;
+    }
+
+    renderCanvas();
+    markDirty();
+}
+
+// ── SLOT PROPERTIES ───────────────────────────────────────────────────────────
+
+function updateSlotPropsPanel() {
+    const panel    = document.getElementById('slotProps');
+    const multiMsg = document.getElementById('multiSelectMsg');
+    const n        = selectedIds.size;
+
+    if (n === 0) {
+        panel.style.display    = 'none';
+        multiMsg.style.display = 'none';
+        return;
+    }
+    if (n > 1) {
+        panel.style.display    = 'none';
+        multiMsg.style.display = 'block';
+        multiMsg.textContent   = `${n} fields selected — use Align tools above, arrow keys to nudge, or Shift+click to adjust selection`;
+        return;
+    }
+    multiMsg.style.display = 'none';
+    const slot = slots.find(s => s.id === primarySlotId);
+    if (!slot) { panel.style.display = 'none'; return; }
+    panel.style.display = 'block';
+    document.getElementById('spX').value        = slot.x;
+    document.getElementById('spY').value        = slot.y;
+    document.getElementById('spW').value        = slot.w;
+    document.getElementById('spH').value        = slot.h;
+    document.getElementById('spFontSize').value   = slot.fontSize   || 32;
+    document.getElementById('spColor').value      = slot.color      || '#ffffff';
+    document.getElementById('spFontFamily').value = slot.fontFamily || 'Arial, sans-serif';
+    document.getElementById('spWeight').value     = slot.fontWeight || 'bold';
+    document.getElementById('spStyle').value      = slot.fontStyle  || 'normal';
+    document.getElementById('spAlign').value      = slot.textAlign  || 'left';
+}
+
+function syncPropsFromSlot(slot) {
+    document.getElementById('spX').value = slot.x;
+    document.getElementById('spY').value = slot.y;
+    document.getElementById('spW').value = slot.w;
+    document.getElementById('spH').value = slot.h;
+}
+
+function onPropChange() {
+    const slot = slots.find(s => s.id === primarySlotId);
+    if (!slot) return;
+    slot.x          = Math.max(0,  parseInt(document.getElementById('spX').value)        || 0);
+    slot.y          = Math.max(0,  parseInt(document.getElementById('spY').value)        || 0);
+    slot.w          = Math.max(20, parseInt(document.getElementById('spW').value)        || 160);
+    slot.h          = Math.max(10, parseInt(document.getElementById('spH').value)        || 52);
+    slot.fontSize   = Math.max(6,  parseInt(document.getElementById('spFontSize').value) || 32);
+    slot.color      = document.getElementById('spColor').value;
+    slot.fontFamily = document.getElementById('spFontFamily').value;
+    slot.fontWeight = document.getElementById('spWeight').value;
+    slot.fontStyle  = document.getElementById('spStyle').value;
+    slot.textAlign  = document.getElementById('spAlign').value;
+    const el = document.querySelector(`.pf[data-slot-id="${slot.id}"]`);
+    if (el) {
+        el.style.left   = (slot.x * scale) + 'px';
+        el.style.top    = (slot.y * scale) + 'px';
+        el.style.width  = (slot.w * scale) + 'px';
+        el.style.height = (slot.h * scale) + 'px';
+        const p = el.querySelector('.pf-preview');
+        if (p) {
+            p.style.fontSize       = (slot.fontSize * scale) + 'px';
+            p.style.color          = slot.color;
+            p.style.fontFamily     = slot.fontFamily || 'Arial, sans-serif';
+            p.style.fontWeight     = slot.fontWeight;
+            p.style.fontStyle      = slot.fontStyle  || 'normal';
+            p.style.justifyContent = slot.textAlign === 'left'   ? 'flex-start'
+                                   : slot.textAlign === 'center' ? 'center'
+                                   :                               'flex-end';
+        }
+    }
+    markDirty();
+}
+
+// ── ADD / DELETE ──────────────────────────────────────────────────────────────
+
+function startAddMode() {
+    if (!currentThemeId) { setStatus('Select a theme first', 'err'); return; }
+    addMode = true;
+    document.getElementById('canvas').classList.add('mode-add');
+    document.getElementById('btnAddSlot').textContent = '⏎ Click on canvas…';
+    setStatus('Click on the canvas to place the price field', 'info');
+}
+
+function deleteSlot(id) {
+    slots = slots.filter(s => s.id !== id);
+    selectedIds.delete(id);
+    if (primarySlotId === id) primarySlotId = selectedIds.size ? [...selectedIds][selectedIds.size - 1] : null;
+    renderCanvas();
+    markDirty();
+}
+
+function startDrag(e, slot, el) {
+    const companions = [];
+    selectedIds.forEach(id => {
+        if (id === slot.id) return;
+        const s2  = slots.find(s => s.id === id);
+        const el2 = document.querySelector(`.pf[data-slot-id="${id}"]`);
+        if (s2 && el2) companions.push({ slot: s2, el: el2, origX: s2.x, origY: s2.y });
+    });
+    dragState = { slot, el, startX: e.clientX, startY: e.clientY, origX: slot.x, origY: slot.y, companions };
+}
+
+function startResize(e, slot, el) {
+    resizeState = { slot, el, startX: e.clientX, startY: e.clientY, origW: slot.w, origH: slot.h };
+}
+
+// ── ITEMS TAB ─────────────────────────────────────────────────────────────────
+
+async function loadItems() {
+    try {
+        const all = document.getElementById('showInactive')?.checked ? '&all=1' : '';
+        const res = await fetch(`${API}?action=items${all}`);
+        items     = await res.json();
+        rebuildConceptDropdowns();
+        rebuildCategoryDatalist();
+        filterPanelItems();
+        renderItemsTab();
+        if (currentThemeId) renderCanvas();
+    } catch(e) { setStatus('Failed to load items', 'err'); }
+}
+
+function rebuildConceptDropdowns() {
+    const concepts = [...new Set(items.map(i => i.concept).filter(Boolean))].sort();
+
+    function repopulate(selId, curVal) {
+        const sel = document.getElementById(selId);
+        if (!sel) return;
+        sel.innerHTML = '<option value="">All Concepts</option>';
+        concepts.forEach(c => {
+            const o = document.createElement('option');
+            o.value = c; o.textContent = c; sel.appendChild(o);
+        });
+        if (curVal) sel.value = curVal;
+    }
+
+    repopulate('pFilterConcept',    document.getElementById('pFilterConcept')?.value);
+    repopulate('itemFilterConcept', document.getElementById('itemFilterConcept')?.value);
+    rebuildCategoryDropdown('pFilterCat',    document.getElementById('pFilterConcept')?.value,    true);
+    rebuildCategoryDropdown('itemFilterCat', document.getElementById('itemFilterConcept')?.value, false);
+}
+
+function rebuildCategoryDatalist() {
+    const dl = document.getElementById('categoryOptions');
+    if (!dl) return;
+    const cats = [...new Set(items.map(i => i.category).filter(Boolean))].sort();
+    dl.innerHTML = cats.map(c => `<option value="${esc(c)}">`).join('');
+}
+
+function rebuildCategoryDropdown(selId, concept, activeOnly) {
+    const sel = document.getElementById(selId);
+    if (!sel) return;
+    const cur  = sel.value;
+    const cats = [...new Set(
+        items.filter(i => (!concept || i.concept === concept) && (!activeOnly || i.isActive))
+             .map(i => i.category).filter(Boolean)
+    )].sort();
+    sel.innerHTML = '<option value="">All Categories</option>';
+    cats.forEach(c => {
+        const o = document.createElement('option');
+        o.value = c; o.textContent = c; sel.appendChild(o);
+    });
+    if (cur) sel.value = cur;
+}
+
+function onPanelConceptChange() {
+    rebuildCategoryDropdown('pFilterCat', document.getElementById('pFilterConcept').value, true);
+    filterPanelItems();
+}
+
+function filterPanelItems() {
+    const concept = document.getElementById('pFilterConcept')?.value || '';
+    const cat     = document.getElementById('pFilterCat')?.value     || '';
+    const search  = (document.getElementById('pFilterSearch')?.value || '').trim().toLowerCase();
+    const sel     = document.getElementById('pNewItem');
+    const prev    = sel.value;
+    sel.innerHTML = '';
+
+    items.filter(i => {
+        if (!i.isActive) return false;
+        if (concept && i.concept !== concept) return false;
+        if (cat && i.category !== cat) return false;
+        if (search && !i.name.toLowerCase().includes(search)) return false;
+        return true;
+    }).forEach(i => {
+        const o = document.createElement('option');
+        o.value = i.itemId;
+        o.textContent = i.concept
+            ? `[${i.concept}] [${i.category}] ${i.name}`
+            : `[${i.category}] ${i.name}`;
+        sel.appendChild(o);
+    });
+
+    if (prev) sel.value = prev;
+}
+
+function onItemConceptChange() {
+    rebuildCategoryDropdown('itemFilterCat', document.getElementById('itemFilterConcept').value, false);
+    renderItemsTab();
+}
+
+function renderItemsTab() {
+    const concept = document.getElementById('itemFilterConcept')?.value || '';
+    const cat     = document.getElementById('itemFilterCat')?.value     || '';
+    const search  = (document.getElementById('itemFilterSearch')?.value || '').trim().toLowerCase();
+
+    const tbody = document.getElementById('itemTbody');
+    tbody.innerHTML = '';
+
+    items.filter(i => {
+        if (concept && i.concept !== concept) return false;
+        if (cat && i.category !== cat) return false;
+        if (search && !i.name.toLowerCase().includes(search)) return false;
+        return true;
+    }).forEach(item => {
+        const tr = document.createElement('tr');
+        if (parseInt(item.isActive) === 0) tr.style.opacity = '0.5';
+        tr.innerHTML = `
+            <td style="color:#666">${item.itemId}</td>
+            <td><input type="text" value="${esc(item.concept||'')}" data-field="concept" data-id="${item.itemId}" placeholder="e.g. BBQ Co." oninput="markDirty(this)"></td>
+            <td><input type="text" value="${esc(item.name)}" data-field="name" data-id="${item.itemId}" oninput="markDirty(this)"></td>
+            <td><input type="text" list="categoryOptions" value="${esc(item.category)}" data-field="category" data-id="${item.itemId}" oninput="markDirty(this)"></td>
+            <td style="text-align:center">
+                <input type="checkbox" ${parseInt(item.isActive) !== 0 ? 'checked' : ''} data-field="isActive" data-id="${item.itemId}" onchange="markDirty(this)">
+            </td>
+            <td style="white-space:nowrap">
+                <button class="grey" style="padding:2px 6px;font-size:11px"
+                        onclick="saveItem(${item.itemId},this)">Save</button>
+                ${parseInt(item.isActive) !== 0
+                    ? `<button class="grey" style="padding:2px 6px;font-size:11px;color:#a60"
+                               onclick="hideItem(${item.itemId})">Hide</button>`
+                    : `<button class="grey" style="padding:2px 6px;font-size:11px;color:#070"
+                               onclick="restoreItem(${item.itemId})">Restore</button>`
+                }
+                <button class="grey" style="padding:2px 6px;font-size:11px;color:#c00"
+                        onclick="deleteItem(${item.itemId})">Delete</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function markDirty(el) {
+    isDirty = true;
+    if (!el) return;
+    const tr = el.closest('tr');
+    if (tr && !tr.dataset.dirty) {
+        tr.dataset.dirty = '1';
+        tr.style.boxShadow = 'inset 3px 0 0 #f90';
+    }
+}
+
+async function saveAllItems() {
+    const rows = document.querySelectorAll('#itemTbody tr[data-dirty]');
+    if (!rows.length) { setStatus('No changes to save', 'ok'); return; }
+    const saves = [];
+    for (const row of rows) {
+        const idEl = row.querySelector('[data-field="name"]');
+        if (!idEl) continue;
+        const itemId = idEl.dataset.id;
+        const g = f => row.querySelector(`[data-field="${f}"][data-id="${itemId}"]`);
+        const name = g('name').value.trim();
+        if (!name) continue;
+        saves.push(fetch(`${API}?action=item&id=${itemId}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                concept:   g('concept').value.trim(),
+                name,
+                category:  g('category').value.trim(),
+                isActive:  g('isActive').checked ? 1 : 0,
+            }),
+        }));
+    }
+    await Promise.all(saves);
+    setStatus(`${saves.length} item${saves.length !== 1 ? 's' : ''} saved`, 'ok');
+    await loadItems();
+    if (currentThemeId) renderCanvas();
+}
+
+async function saveItem(itemId, btn) {
+    const row = btn.closest('tr');
+    const g   = f => row.querySelector(`[data-field="${f}"][data-id="${itemId}"]`);
+    const name = g('name').value.trim();
+    if (!name) { setStatus('Name cannot be empty', 'err'); return; }
+    await fetch(`${API}?action=item&id=${itemId}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            concept:   g('concept').value.trim(),
+            name,
+            category:  g('category').value.trim(),
+            isActive:  g('isActive').checked ? 1 : 0,
+        }),
+    });
+    delete btn.closest('tr').dataset.dirty;
+    setStatus(`Item #${itemId} saved`, 'ok');
+    await loadItems();
+    if (currentThemeId) renderCanvas();
+}
+
+async function hideItem(itemId) {
+    await fetch(`${API}?action=item&id=${itemId}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: 0 }),
+    });
+    setStatus(`Item #${itemId} hidden`, 'ok');
+    await loadItems();
+}
+
+async function restoreItem(itemId) {
+    await fetch(`${API}?action=item&id=${itemId}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: 1 }),
+    });
+    setStatus(`Item #${itemId} restored`, 'ok');
+    await loadItems();
+}
+
+async function deleteItem(itemId) {
+    const res = await fetch(`${API}?action=item&id=${itemId}`);
+    const item = await res.json();
+    const label = item.name || `#${itemId}`;
+    if (!confirm(`Permanently delete "${label}"?\n\nThis will also remove all pricing data for this item and cannot be undone.`)) return;
+    await fetch(`${API}?action=item&id=${itemId}`, { method: 'DELETE' });
+    setStatus(`"${label}" deleted`, 'ok');
+    await loadItems();
+}
+
+// ── PRICES TAB ────────────────────────────────────────────────────────────────
+
+async function loadStores() {
+    const res    = await fetch(`${API}?action=stores`);
+    const stores = await res.json();
+    const sel    = document.getElementById('priceStoreSelect');
+    sel.innerHTML = '<option value="">— select store —</option>';
+    stores.forEach(s => {
+        const o = document.createElement('option');
+        o.value = s.displayGroupId;
+        o.textContent = s.displayGroup;
+        sel.appendChild(o);
+    });
+}
+
+let priceAllRows     = [];
+let priceOriginals   = {}; // itemId -> { price, priceLabel, isAvailable } snapshot at load time
+let priceSchedByItem = {}; // itemId -> array of schedule rows
+let _priceSchedCtx   = null; // { itemId, itemName, itemCategory } for open modal
+
+async function loadPrices() {
+    const storeId = document.getElementById('priceStoreSelect').value;
+    document.getElementById('btnSavePrices').disabled = !storeId;
+    if (!storeId) return;
+    const res     = await fetch(`${API}?action=prices&storeId=${storeId}`);
+    priceAllRows  = await res.json();
+    priceOriginals = {};
+    priceAllRows.forEach(row => {
+        priceOriginals[row.itemId] = {
+            price:       row.price !== null ? parseFloat(row.price) : null,
+            priceLabel:  row.priceLabel ?? '',
+            isAvailable: parseInt(row.isAvailable),
+        };
+    });
+
+    // Populate category filter (preserve current selection)
+    const catSel  = document.getElementById('priceCatFilter');
+    const prevCat = catSel.value;
+    const cats    = [...new Set(priceAllRows.map(r => r.category).filter(Boolean))].sort();
+    catSel.innerHTML = '<option value="">— all categories —</option>';
+    cats.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; catSel.appendChild(o); });
+    if (cats.includes(prevCat)) catSel.value = prevCat;
+
+    renderPricesTable();
+    loadPriceSchedules();
+}
+
+function renderPricesTable() {
+    const catFilter = document.getElementById('priceCatFilter').value;
+    const search    = (document.getElementById('priceSearch').value || '').toLowerCase().trim();
+    const tbody     = document.getElementById('priceTbody');
+    tbody.innerHTML = '';
+
+    priceAllRows.filter(row => {
+        if (catFilter && row.category !== catFilter) return false;
+        if (search && !row.name.toLowerCase().includes(search)) return false;
+        return true;
+    }).forEach(row => {
+        const scheds  = priceSchedByItem[row.itemId] || [];
+        const now     = new Date();
+        const pending = scheds.filter(s => new Date(s.effectiveAt.replace(' ','T')) > now);
+
+        let clockBtn;
+        if (scheds.length > 0) {
+            const bg = pending.length > 0 ? '#b06a00' : '#1a6a42';
+            clockBtn = `<button style="font-size:11px;height:24px;padding:0 6px;background:${bg};border:none;border-radius:3px;cursor:pointer;color:#fff;white-space:nowrap"
+                title="${pending.length} pending / ${scheds.length - pending.length} live"
+                data-itemid="${row.itemId}" data-name="${esc(row.name)}" data-category="${esc(row.category)}"
+                onclick="showPriceSchedModal(this)">⏰ ${scheds.length}</button>`;
+        } else {
+            clockBtn = `<button class="grey" style="font-size:11px;height:24px;padding:0 6px"
+                title="Schedule a future price change"
+                data-itemid="${row.itemId}" data-name="${esc(row.name)}" data-category="${esc(row.category)}"
+                onclick="showPriceSchedModal(this)">⏰</button>`;
+        }
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="color:#666">${row.itemId}</td>
+            <td>${esc(row.name)}</td>
+            <td style="color:#888">${esc(row.category)}</td>
+            <td><input type="number" step="0.01" min="0"
+                       value="${row.price !== null ? row.price : ''}"
+                       placeholder="0.00"
+                       data-itemid="${row.itemId}" data-field="price"></td>
+            <td><input type="text"
+                       value="${esc(row.priceLabel||'')}"
+                       placeholder="e.g. Sm $3 / Lg $5"
+                       data-itemid="${row.itemId}" data-field="priceLabel"></td>
+            <td style="text-align:center">
+                <input type="checkbox" ${row.isAvailable!=0?'checked':''}
+                       data-itemid="${row.itemId}" data-field="isAvailable">
+            </td>
+            <td style="text-align:center">${clockBtn}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+async function savePrices() {
+    const storeId = document.getElementById('priceStoreSelect').value;
+    if (!storeId) return;
+
+    const changed = [];
+    document.getElementById('priceTbody').querySelectorAll('tr').forEach(tr => {
+        const inp = tr.querySelector('[data-field="price"]');
+        if (!inp) return;
+        const itemId = parseInt(inp.dataset.itemid);
+        const price  = inp.value.trim() !== '' ? parseFloat(inp.value.trim()) : null;
+        const label  = tr.querySelector('[data-field="priceLabel"]').value.trim();
+        const avail  = tr.querySelector('[data-field="isAvailable"]').checked ? 1 : 0;
+        const orig   = priceOriginals[itemId];
+        if (!orig) return;
+        if (price !== orig.price || label !== (orig.priceLabel ?? '') || avail !== orig.isAvailable) {
+            changed.push({ itemId, price, priceLabel: label || null, isAvailable: avail });
+        }
+    });
+
+    if (changed.length === 0) {
+        setStatus('No changes to save', 'ok');
+        return;
+    }
+
+    const res  = await fetch(`${API}?action=prices&storeId=${storeId}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(changed),
+    });
+    const data = await res.json();
+
+    // Update snapshot so a second save won't re-send these rows
+    changed.forEach(r => {
+        priceOriginals[r.itemId] = { price: r.price, priceLabel: r.priceLabel ?? '', isAvailable: r.isAvailable };
+    });
+
+    const pub = data.publishedLayouts > 0 ? `, ${data.publishedLayouts} layout(s) notified` : '';
+    setStatus(`✔ Saved ${data.updated} prices${pub}`, 'ok');
+}
+
+// ── MODAL ─────────────────────────────────────────────────────────────────────
+
+function showModal(type) {
+    const title = document.getElementById('modalTitle');
+    const body  = document.getElementById('modalBody');
+
+    if (type === 'new-theme') {
+        title.textContent = 'Create New Theme';
+        body.innerHTML = `
+            <div class="field-row">
+                <label>Theme Name</label>
+                <input type="text" id="m_name" placeholder="e.g. StandardBoard_Landscape_v1" autofocus>
+            </div>
+            <div class="field-row">
+                <label>Background URL (optional — can set later)</label>
+                <input type="text" id="m_bg" placeholder="https://…">
+            </div>
+        `;
+        modalAction = async () => {
+            const name = document.getElementById('m_name').value.trim();
+            const bg   = document.getElementById('m_bg').value.trim();
+            if (!name) { setStatus('Theme name required', 'err'); return; }
+            const res  = await fetch(`${API}?action=theme`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ themeName: name, backgroundUrl: bg }),
+            });
+            const data = await res.json();
+            if (data.themeId) {
+                hideModal();
+                await loadThemes();
+                document.getElementById('themeSelect').value = data.themeId;
+                await loadTheme(data.themeId);
+                setStatus('Created: ' + name, 'ok');
+            }
+        };
+    }
+
+    if (type === 'new-item') {
+        title.textContent = 'Add Menu Item';
+        body.innerHTML = `
+            <div class="field-row"><label>Name</label>
+                <input type="text" id="m_iname" autofocus></div>
+            <div class="field-row"><label>Restaurant Concept</label>
+                <input type="text" id="m_iconcept" placeholder="e.g. Dickey's BBQ"></div>
+            <div class="field-row"><label>Category</label>
+                <input type="text" id="m_icat" placeholder="e.g. Burgers"></div>
+            <div class="field-row"><label>Description</label>
+                <input type="text" id="m_idesc"></div>
+        `;
+        modalAction = async () => {
+            const name = document.getElementById('m_iname').value.trim();
+            if (!name) { setStatus('Name required', 'err'); return; }
+            await fetch(`${API}?action=item`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name,
+                    concept:     document.getElementById('m_iconcept').value.trim(),
+                    category:    document.getElementById('m_icat').value.trim(),
+                    description: document.getElementById('m_idesc').value.trim(),
+                }),
+            });
+            hideModal();
+            await loadItems();
+            setStatus('Item added: ' + name, 'ok');
+        };
+    }
+
+    document.getElementById('modalOverlay').classList.add('open');
+}
+
+function hideModal(e) {
+    if (e && e.target !== document.getElementById('modalOverlay')) return;
+    document.getElementById('modalOverlay').classList.remove('open');
+    modalAction = null;
+}
+
+function modalConfirmAction() { if (modalAction) modalAction(); }
+
+// ── UTILITY ───────────────────────────────────────────────────────────────────
+
+// (row dirty tracking handled by markDirty(el) above)
+
+function setStatus(msg, type = '') {
+    const el = document.getElementById('statusMsg');
+    el.textContent = msg;
+    el.className   = type;
+    // Keep success/error messages visible for 4 seconds
+    if (type === 'ok' || type === 'err') {
+        clearTimeout(el._timer);
+        el._timer = setTimeout(() => {
+            if (el.textContent === msg) { el.textContent = ''; el.className = ''; }
+        }, 4000);
+    }
+}
+
+function esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+window.addEventListener('beforeunload', e => {
+    if (isDirty) { e.preventDefault(); e.returnValue = ''; }
+});
+
+// ── PRICE SCHEDULES ───────────────────────────────────────────────────────────
+
+async function loadPriceSchedules() {
+    const storeId = document.getElementById('priceStoreSelect').value;
+    const section = document.getElementById('priceSchedSection');
+    if (!storeId) { section.style.display = 'none'; return; }
+    try {
+        const res  = await fetch(`${API}?action=price_schedules&storeId=${storeId}`);
+        const rows = await res.json();
+        if (!Array.isArray(rows)) { section.style.display = 'none'; return; }
+
+        // Build per-item index for badge indicators
+        priceSchedByItem = {};
+        rows.forEach(r => {
+            if (!priceSchedByItem[r.itemId]) priceSchedByItem[r.itemId] = [];
+            priceSchedByItem[r.itemId].push(r);
+        });
+        renderPricesTable(); // update clock button badges
+
+        const tbody = document.getElementById('priceSchedTbody');
+        tbody.innerHTML = '';
+        if (rows.length === 0) { section.style.display = 'none'; return; }
+        const now = new Date();
+        rows.forEach(r => {
+            const effDate = new Date(r.effectiveAt.replace(' ', 'T'));
+            const isPast  = effDate <= now;
+            const badge   = isPast
+                ? `<span class="ps-badge live">LIVE</span>`
+                : `<span class="ps-badge pending">PENDING</span>`;
+            const dateStr = effDate.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+            const priceDisplay = r.price !== null ? '$' + parseFloat(r.price).toFixed(2) : '—';
+            const cancel = !isPast
+                ? `<button class="red" style="font-size:10px;height:20px;padding:0 6px" onclick="cancelPriceSchedule(${r.priceScheduleId})">Cancel</button>`
+                : '';
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${badge}</td>
+                <td>${esc(r.itemName)}</td>
+                <td style="color:#888">${esc(r.itemCategory)}</td>
+                <td>${priceDisplay}</td>
+                <td>${r.priceLabel ? esc(r.priceLabel) : '<span style="color:#555">—</span>'}</td>
+                <td style="text-align:center">${r.isAvailable ? '✓' : '<span style="color:#d55">✗</span>'}</td>
+                <td style="color:#888">${dateStr}</td>
+                <td style="color:#666;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.notes||'')}">${esc(r.notes||'')}</td>
+                <td>${cancel}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+        section.style.display = 'block';
+    } catch(e) {
+        document.getElementById('priceSchedSection').style.display = 'none';
+    }
+}
+
+async function cancelPriceSchedule(id) {
+    if (!confirm('Cancel this scheduled price change?')) return;
+    try {
+        await fetch(`${API}?action=price_schedule&id=${id}`, { method: 'DELETE' });
+        setStatus('Price schedule cancelled', 'info');
+        loadPriceSchedules();
+    } catch(e) {
+        setStatus('Error: ' + e.message, 'err');
+    }
+}
+
+function buildPriceSchedModalBody() {
+    const { itemId, itemName, itemCategory } = _priceSchedCtx;
+    const scheds = priceSchedByItem[itemId] || [];
+    const now    = new Date();
+
+    let existingHtml = '';
+    if (scheds.length > 0) {
+        const rows = scheds.map(s => {
+            const effDate = new Date(s.effectiveAt.replace(' ','T'));
+            const isPast  = effDate <= now;
+            const badge   = isPast ? `<span class="ps-badge live">LIVE</span>` : `<span class="ps-badge pending">PENDING</span>`;
+            const dateStr = effDate.toLocaleString([], { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
+            const priceDisplay = s.price !== null ? '$' + parseFloat(s.price).toFixed(2) : '—';
+            const cancel = !isPast
+                ? `<button class="red" style="font-size:10px;height:20px;padding:0 6px;flex-shrink:0" onclick="cancelPriceSchedInModal(${s.priceScheduleId})">Cancel</button>`
+                : '';
+            return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #2a2a2a;flex-wrap:wrap">
+                ${badge}
+                <span style="color:#aaa;font-size:12px">${dateStr}</span>
+                <span style="color:#7af;font-size:12px;font-weight:bold">${priceDisplay}</span>
+                ${s.priceLabel ? `<span style="color:#888;font-size:11px">${esc(s.priceLabel)}</span>` : ''}
+                ${s.notes ? `<span style="color:#666;font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(s.notes)}">${esc(s.notes)}</span>` : '<span style="flex:1"></span>'}
+                ${cancel}
+            </div>`;
+        }).join('');
+        existingHtml = `
+            <div style="margin-bottom:12px">
+                <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Existing Schedules</div>
+                ${rows}
+            </div>
+            <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.06em;margin:14px 0 8px">Schedule New Change</div>`;
+    }
+
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    const pad = n => String(n).padStart(2, '0');
+    const tomorrowStr = `${tomorrow.getFullYear()}-${pad(tomorrow.getMonth()+1)}-${pad(tomorrow.getDate())}T00:00`;
+
+    return `
+        <div class="field-row">
+            <label>Item</label>
+            <div style="font-size:12px;color:#7af;padding:4px 0">${esc(itemName)}${itemCategory ? ' <span style="color:#666">— ' + esc(itemCategory) + '</span>' : ''}</div>
+        </div>
+        ${existingHtml}
+        <div class="field-row-2">
+            <div>
+                <label>New Price ($)</label>
+                <input type="number" id="m_ps_price" step="0.01" min="0" placeholder="0.00" style="width:100%">
+            </div>
+            <div>
+                <label>Available</label>
+                <select id="m_ps_avail" style="width:100%">
+                    <option value="1">Yes</option>
+                    <option value="0">No</option>
+                </select>
+            </div>
+        </div>
+        <div class="field-row">
+            <label>New Label (override, optional)</label>
+            <input type="text" id="m_ps_label" placeholder="e.g. Sm $3 / Lg $5" style="width:100%">
+        </div>
+        <div class="field-row">
+            <label>Effective Date &amp; Time</label>
+            <input type="datetime-local" id="m_ps_date" value="${tomorrowStr}" style="width:100%">
+        </div>
+        <div class="field-row">
+            <label>Notes (optional)</label>
+            <input type="text" id="m_ps_notes" placeholder="e.g. Q2 price increase" style="width:100%">
+        </div>
+    `;
+}
+
+function showPriceSchedModal(btn) {
+    const storeId = document.getElementById('priceStoreSelect').value;
+    if (!storeId) { setStatus('Select a store first', 'err'); return; }
+    _priceSchedCtx = {
+        itemId:      parseInt(btn.dataset.itemid),
+        itemName:    btn.dataset.name,
+        itemCategory: btn.dataset.category,
+        storeId,
+    };
+    document.getElementById('modalTitle').textContent = 'Price Schedules';
+    document.getElementById('modalBody').innerHTML = buildPriceSchedModalBody();
+    modalAction = async () => {
+        const rawDate = document.getElementById('m_ps_date').value;
+        if (!rawDate) { setStatus('Effective date is required', 'err'); return; }
+        const priceVal = document.getElementById('m_ps_price').value.trim();
+        try {
+            const res = await fetch(`${API}?action=price_schedule`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    itemId:      _priceSchedCtx.itemId,
+                    storeId:     parseInt(storeId),
+                    price:       priceVal !== '' ? parseFloat(priceVal) : null,
+                    priceLabel:  document.getElementById('m_ps_label').value.trim() || null,
+                    isAvailable: parseInt(document.getElementById('m_ps_avail').value),
+                    effectiveAt: rawDate.replace('T', ' ') + ':00',
+                    notes:       document.getElementById('m_ps_notes').value.trim() || null,
+                }),
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            hideModal();
+            setStatus('Price change scheduled', 'ok');
+            loadPriceSchedules();
+        } catch(e) {
+            setStatus('Error: ' + e.message, 'err');
+        }
+    };
+    document.getElementById('modalOverlay').classList.add('open');
+}
+
+async function cancelPriceSchedInModal(schedId) {
+    try {
+        await fetch(`${API}?action=price_schedule&id=${schedId}`, { method: 'DELETE' });
+        // Remove from local index
+        if (_priceSchedCtx && priceSchedByItem[_priceSchedCtx.itemId]) {
+            priceSchedByItem[_priceSchedCtx.itemId] = priceSchedByItem[_priceSchedCtx.itemId].filter(s => s.priceScheduleId !== schedId);
+            if (priceSchedByItem[_priceSchedCtx.itemId].length === 0) delete priceSchedByItem[_priceSchedCtx.itemId];
+        }
+        // Refresh modal and badge
+        document.getElementById('modalBody').innerHTML = buildPriceSchedModalBody();
+        renderPricesTable();
+        setStatus('Price schedule cancelled', 'ok');
+    } catch(e) {
+        setStatus('Error: ' + e.message, 'err');
+    }
+}
+
+// ── SCHEDULER ─────────────────────────────────────────────────────────────────
+
+let schedWidgets   = [];
+let schedSchedules = [];
+let schedView      = 'store'; // 'store' | 'theme'
+
+function setSchedView(v) {
+    schedView = v;
+    renderScheduler();
+}
+
+async function loadScheduler() {
+    const el = document.getElementById('schedulerContent');
+    el.innerHTML = '<p style="color:#666;font-style:italic">Checking for pending changes…</p>';
+    try {
+        // Apply any past-due schedules first — updates widget option, lkwidgetmedia, and layout modifiedDt
+        const applyRes  = await fetch(`${API}?action=apply_schedules`, { method: 'POST' });
+        const applyData = await applyRes.json();
+        if (applyData.count > 0) {
+            setStatus(
+                `Applied ${applyData.count} scheduled theme change${applyData.count > 1 ? 's' : ''} — displays will update on their next check-in`,
+                'ok'
+            );
+        }
+
+        const [wRes, sRes] = await Promise.all([
+            fetch(`${API}?action=widgets`),
+            fetch(`${API}?action=schedules`),
+        ]);
+        schedWidgets   = await wRes.json();
+        schedSchedules = await sRes.json();
+        if (!Array.isArray(schedWidgets))   throw new Error(schedWidgets.error   || 'Widgets API error');
+        if (!Array.isArray(schedSchedules)) throw new Error(schedSchedules.error || 'Schedules API error');
+        renderScheduler();
+    } catch(e) {
+        el.innerHTML = `<p style="color:#d55">Failed to load: ${esc(e.message)}</p>`;
+    }
+}
+
+function renderScheduler() {
+    // Keep view toggle buttons in sync
+    document.getElementById('schedViewStoreBtn').style.background = schedView === 'store' ? '#1a6cc4' : '';
+    document.getElementById('schedViewThemeBtn').style.background = schedView === 'theme' ? '#1a6cc4' : '';
+
+    const el  = document.getElementById('schedulerContent');
+    const now = new Date();
+
+    if (!schedWidgets.length) {
+        el.innerHTML = '<p style="color:#666;font-style:italic">No MenuBoard widgets found. Create a MenuBoard widget in Xibo and assign it a store.</p>';
+        renderBulkSection();
+        return;
+    }
+
+    if (schedView === 'theme') {
+        renderByTheme(el, now);
+    } else {
+        renderByStore(el, now);
+    }
+    renderBulkSection();
+}
+
+function renderByStore(el, now) {
+    const storeMap = new Map();
+    for (const w of schedWidgets) {
+        const sid = String(w.storeId);
+        if (!storeMap.has(sid)) storeMap.set(sid, { storeId: w.storeId, storeName: w.storeName, widgets: [] });
+        storeMap.get(sid).widgets.push(w);
+    }
+
+    let html = '';
+    for (const [, store] of storeMap) {
+        const storeSched = schedSchedules.filter(s => String(s.storeId) === String(store.storeId) && s.widgetId == null);
+
+        html += `<div class="sched-store">`;
+        html += `<div class="sched-store-hdr"><span class="sched-store-name">${esc(store.storeName || 'Store #' + store.storeId)}</span></div>`;
+        html += `<div class="sched-boards">`;
+
+        for (const w of store.widgets) {
+            const wSched = schedSchedules.filter(s => String(s.widgetId) === String(w.widgetId));
+            const pastSched = [...storeSched, ...wSched]
+                .filter(s => new Date(s.goLiveAt.replace(' ', 'T')) <= now)
+                .sort((a, b) => {
+                    if ((a.widgetId !== null) !== (b.widgetId !== null)) return a.widgetId !== null ? -1 : 1;
+                    return new Date(b.goLiveAt) - new Date(a.goLiveAt);
+                });
+            const effectiveTheme = pastSched.length ? pastSched[0].toThemeName : w.themeName;
+            const upcoming = [...storeSched, ...wSched]
+                .filter(s => new Date(s.goLiveAt.replace(' ', 'T')) > now)
+                .sort((a, b) => new Date(a.goLiveAt) - new Date(b.goLiveAt));
+            const next = upcoming[0] || null;
+
+            html += boardCard(w, store.storeId, effectiveTheme, next, now, storeSched, wSched, store.storeName || '');
+        }
+
+        html += `</div></div>`;
+    }
+    el.innerHTML = html;
+}
+
+function renderByTheme(el, now) {
+    // Group by the widget's currently assigned themeId
+    const themeMap = new Map();
+    for (const w of schedWidgets) {
+        const key = String(w.themeId);
+        if (!themeMap.has(key)) themeMap.set(key, { themeId: w.themeId, themeName: w.themeName, widgets: [] });
+        themeMap.get(key).widgets.push(w);
+    }
+    // Sort themes alphabetically
+    const sorted = [...themeMap.values()].sort((a, b) => (a.themeName || '').localeCompare(b.themeName || ''));
+
+    let html = '';
+    for (const group of sorted) {
+        html += `<div class="sched-store">`;
+        html += `<div class="sched-store-hdr"><span class="sched-store-name">${esc(group.themeName || 'Theme #' + group.themeId)}</span>`;
+        html += `<span style="font-size:11px;color:#888;font-weight:normal">${group.widgets.length} board${group.widgets.length !== 1 ? 's' : ''}</span></div>`;
+        html += `<div class="sched-boards">`;
+
+        for (const w of group.widgets) {
+            const wSched = schedSchedules.filter(s => String(s.widgetId) === String(w.widgetId));
+            const upcoming = wSched.filter(s => new Date(s.goLiveAt.replace(' ', 'T')) > now)
+                .sort((a, b) => new Date(a.goLiveAt) - new Date(b.goLiveAt));
+            const next = upcoming[0] || null;
+            // In theme view show store name in the board card
+            html += boardCard(w, w.storeId, w.themeName, next, now, [], wSched, w.storeName || '');
+        }
+
+        html += `</div></div>`;
+    }
+    el.innerHTML = html;
+}
+
+function boardCard(w, storeId, effectiveTheme, next, now, storeSched, wSched, storeName) {
+    const storeLabel  = storeName;
+    const boardLabel  = esc(w.layoutName || 'Board #' + w.widgetId);
+    const displayLabel = w.displayNames ? esc(w.displayNames) : null;
+
+    let html = `<div class="sched-board"><div class="sched-board-hdr"><div>`;
+    html += `<div class="sched-board-name">${boardLabel}</div>`;
+    if (storeLabel && schedView === 'theme') html += `<div class="sched-board-display">Store: ${esc(storeLabel)}</div>`;
+    if (displayLabel) html += `<div class="sched-board-display">Display: ${displayLabel}</div>`;
+    html += `<div class="sched-board-theme">Theme: <strong>${esc(effectiveTheme || 'None')}</strong>`;
+    if (next) {
+        const nextDt = new Date(next.goLiveAt.replace(' ', 'T'));
+        html += ` &rarr; <em>${esc(next.toThemeName || 'Theme #' + next.toThemeId)}</em>`;
+        html += ` <span style="color:#555;font-size:10px">on ${nextDt.toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}</span>`;
+    }
+    html += `</div></div>`;
+    html += `<button onclick="showSchedModal(${storeId}, ${w.widgetId})">+ Schedule Change</button>`;
+    html += `</div>`;
+
+    const allRows = [
+        ...wSched.map(s => ({ ...s, _scope: null })),
+        ...storeSched.map(s => ({ ...s, _scope: 'All boards in store' })),
+    ].sort((a, b) => new Date(b.goLiveAt) - new Date(a.goLiveAt));
+    for (const s of allRows) html += renderSchedRow(s, now);
+
+    html += `</div>`;
+    return html;
+}
+
+// ── BULK SCHEDULER ────────────────────────────────────────────────────────────
+
+let bulkSelectedIds = new Set(); // persists across scheduler refreshes
+
+function renderBulkSection() {
+    const el = document.getElementById('bulkSchedSection');
+    if (!schedWidgets.length) { el.style.display = 'none'; return; }
+    el.style.display = '';
+
+    const pad = n => String(n).padStart(2, '0');
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    const tomorrowStr = `${tomorrow.getFullYear()}-${pad(tomorrow.getMonth()+1)}-${pad(tomorrow.getDate())}T00:00`;
+
+    // From-theme options: only themes currently in use by boards
+    const usedThemeIds = [...new Set(schedWidgets.map(w => String(w.themeId)))];
+    const usedThemes   = themes.filter(t => usedThemeIds.includes(String(t.themeId)));
+    const fromOpts     = `<option value="">— show all boards —</option>`
+        + usedThemes.map(t => `<option value="${t.themeId}">${esc(t.themeName)}</option>`).join('');
+    const toOpts = themes.map(t => `<option value="${t.themeId}">${esc(t.themeName)}</option>`).join('');
+
+    // Preserve form values across refreshes
+    const prevFrom  = el.querySelector('#bulkFromTheme')?.value  || '';
+    const prevTo    = el.querySelector('#bulkToTheme')?.value    || '';
+    const prevDate  = el.querySelector('#bulkGoLive')?.value     || tomorrowStr;
+    const prevNotes = el.querySelector('#bulkNotes')?.value      || '';
+
+    el.innerHTML = `
+    <div class="bulk-card">
+      <div class="bulk-card-hdr">
+        <span class="bulk-card-title">Bulk Schedule Change</span>
+        <span class="bulk-card-sub">Pick boards, choose a target theme and date, then schedule them all at once.</span>
+      </div>
+      <div class="bulk-card-body">
+        <div class="bulk-filter-row">
+          <span>Boards currently showing:</span>
+          <select id="bulkFromTheme" onchange="updateBulkBoardList()">
+            ${fromOpts}
+          </select>
+        </div>
+        <div id="bulkBoardList" class="bulk-board-list"></div>
+        <div class="bulk-to-grid">
+          <div class="field-row">
+            <label>Switch to theme</label>
+            <select id="bulkToTheme" style="width:100%">${toOpts}</select>
+          </div>
+          <div class="field-row">
+            <label>Go Live Date &amp; Time</label>
+            <input type="datetime-local" id="bulkGoLive" value="${tomorrowStr}" style="width:100%">
+          </div>
+        </div>
+        <div class="bulk-notes-row field-row">
+          <label>Notes (optional)</label>
+          <input type="text" id="bulkNotes" placeholder="e.g. Q3 summer rollout" style="width:100%">
+        </div>
+        <div class="bulk-actions">
+          <button class="green" id="bulkSubmitBtn" onclick="submitBulkSchedule()" disabled>Select boards to schedule</button>
+          <button class="grey" onclick="bulkSelectAll(true)" style="font-size:11px">Select All</button>
+          <button class="grey" onclick="bulkSelectAll(false)" style="font-size:11px">Deselect All</button>
+          <span class="bulk-sel-count" id="bulkSelCount"></span>
+        </div>
+      </div>
+    </div>`;
+
+    // Restore preserved form values
+    if (prevFrom)  document.getElementById('bulkFromTheme').value = prevFrom;
+    if (prevTo)    document.getElementById('bulkToTheme').value   = prevTo;
+    if (prevDate)  document.getElementById('bulkGoLive').value    = prevDate;
+    if (prevNotes) document.getElementById('bulkNotes').value     = prevNotes;
+
+    updateBulkBoardList();
+}
+
+function updateBulkBoardList() {
+    const listEl      = document.getElementById('bulkBoardList');
+    const fromThemeId = document.getElementById('bulkFromTheme')?.value || '';
+    if (!listEl) return;
+
+    const visible = fromThemeId
+        ? schedWidgets.filter(w => String(w.themeId) === fromThemeId)
+        : schedWidgets;
+
+    if (!visible.length) {
+        listEl.innerHTML = `<div class="bulk-board-list-empty">No boards match this filter.</div>`;
+        updateBulkCount();
+        return;
+    }
+
+    listEl.innerHTML = visible.map(w => {
+        const checked = bulkSelectedIds.has(String(w.widgetId)) ? 'checked' : '';
+        const disp    = w.displayNames
+            ? `<div class="bulk-board-info">Display: ${esc(w.displayNames)}</div>` : '';
+        return `<label class="bulk-board-item">
+            <input type="checkbox" value="${w.widgetId}" ${checked} onchange="onBulkCheck(this)">
+            <div class="bulk-board-label">
+                <div class="bulk-board-name">${esc(w.layoutName || 'Board #' + w.widgetId)}</div>
+                ${disp}
+            </div>
+            <span class="bulk-board-theme-badge">${esc(w.themeName || 'Theme #' + w.themeId)}</span>
+        </label>`;
+    }).join('');
+
+    updateBulkCount();
+}
+
+function onBulkCheck(cb) {
+    if (cb.checked) bulkSelectedIds.add(String(cb.value));
+    else            bulkSelectedIds.delete(String(cb.value));
+    updateBulkCount();
+}
+
+function bulkSelectAll(select) {
+    const fromThemeId = document.getElementById('bulkFromTheme')?.value || '';
+    const visible = fromThemeId
+        ? schedWidgets.filter(w => String(w.themeId) === fromThemeId)
+        : schedWidgets;
+    for (const w of visible) {
+        if (select) bulkSelectedIds.add(String(w.widgetId));
+        else        bulkSelectedIds.delete(String(w.widgetId));
+    }
+    updateBulkBoardList();
+}
+
+function updateBulkCount() {
+    const btn   = document.getElementById('bulkSubmitBtn');
+    const label = document.getElementById('bulkSelCount');
+    if (!btn) return;
+    const n = bulkSelectedIds.size;
+    if (n === 0) {
+        btn.textContent = 'Select boards to schedule';
+        btn.disabled = true;
+        if (label) label.textContent = '';
+    } else {
+        btn.textContent = `Schedule ${n} board${n > 1 ? 's' : ''}`;
+        btn.disabled = false;
+        if (label) label.textContent = `${n} selected`;
+    }
+}
+
+async function submitBulkSchedule() {
+    const toThemeId = parseInt(document.getElementById('bulkToTheme')?.value  || '0');
+    const rawDate   = document.getElementById('bulkGoLive')?.value             || '';
+    const notes     = (document.getElementById('bulkNotes')?.value || '').trim();
+    if (!bulkSelectedIds.size) { setStatus('Select at least one board', 'err');  return; }
+    if (!toThemeId)             { setStatus('Select a target theme',    'err');  return; }
+    if (!rawDate)               { setStatus('Go-live date is required', 'err');  return; }
+
+    const goLiveAt  = rawDate.replace('T', ' ') + ':00';
+    const widgetIds = [...bulkSelectedIds].map(Number);
+
+    try {
+        const res  = await fetch(`${API}?action=bulk_schedule`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ widgetIds, toThemeId, goLiveAt, notes: notes || null }),
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        setStatus(`Scheduled ${data.count} board${data.count > 1 ? 's' : ''} for theme change`, 'ok');
+        bulkSelectedIds.clear();
+        await loadScheduler();
+    } catch(e) {
+        setStatus('Error: ' + e.message, 'err');
+    }
+}
+
+function renderSchedRow(s, now) {
+    const goLive    = new Date(s.goLiveAt.replace(' ', 'T'));
+    const isPast    = goLive <= now;
+    const isApplied = !!s.appliedAt;
+
+    let rowClass, badge;
+    if (isApplied) {
+        rowClass = 'applied';
+        badge    = `<span class="sched-badge applied">APPLIED</span>`;
+    } else if (isPast) {
+        rowClass = 'live';
+        badge    = `<span class="sched-badge live">QUEUED</span>`;
+    } else {
+        rowClass = 'pending';
+        badge    = `<span class="sched-badge pending">PENDING</span>`;
+    }
+
+    const dateStr = goLive.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const arrow   = s.fromThemeName ? `${esc(s.fromThemeName)} &rarr; ` : '';
+    const notes   = s.notes ? `<span class="sched-row-notes" title="${esc(s.notes)}">${esc(s.notes)}</span>` : '';
+    const scope   = s._scope ? `<span class="sched-row-scope">${esc(s._scope)}</span>` : '';
+    const action  = !isPast
+        ? `<button class="red" style="font-size:10px;height:20px;padding:0 6px" onclick="cancelSchedule(${s.scheduleId})">Cancel</button>`
+        : '';
+
+    return `<div class="sched-row ${rowClass}">
+        ${badge}
+        <span class="sched-row-desc">${arrow}${esc(s.toThemeName || 'Theme #' + s.toThemeId)}</span>
+        <span class="sched-row-date">${dateStr}</span>
+        ${scope}
+        ${notes}
+        ${action}
+    </div>`;
+}
+
+async function cancelSchedule(id) {
+    if (!confirm('Cancel this scheduled theme change?')) return;
+    try {
+        await fetch(`${API}?action=schedule&id=${id}`, { method: 'DELETE' });
+        setStatus('Schedule cancelled', 'info');
+        await loadScheduler();
+    } catch(e) {
+        setStatus('Error cancelling schedule: ' + e.message, 'err');
+    }
+}
+
+let schedModalStoreId  = null;
+let schedModalWidgetId = null;
+
+function showSchedModal(storeId, widgetId) {
+    schedModalStoreId  = storeId;
+    schedModalWidgetId = widgetId;
+
+    const wgt        = schedWidgets.find(w => String(w.widgetId) === String(widgetId));
+    const boardName  = wgt ? (wgt.layoutName  || 'Board #' + widgetId) : 'Board #' + widgetId;
+    const dispName   = wgt && wgt.displayNames ? wgt.displayNames : null;
+
+    // Default go-live: tomorrow midnight local time
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    const pad = n => String(n).padStart(2, '0');
+    const tomorrowStr = `${tomorrow.getFullYear()}-${pad(tomorrow.getMonth()+1)}-${pad(tomorrow.getDate())}T00:00`;
+
+    const themeOpts = themes.map(t => `<option value="${t.themeId}">${esc(t.themeName)}</option>`).join('');
+
+    document.getElementById('modalTitle').textContent = 'Schedule Theme Change';
+    document.getElementById('modalBody').innerHTML = `
+        <div class="field-row">
+            <label>Layout</label>
+            <div style="padding:4px 0;font-size:12px;color:#7af">${esc(boardName)}</div>
+        </div>
+        ${dispName ? `<div class="field-row">
+            <label>Display</label>
+            <div style="padding:4px 0;font-size:11px;color:#888">${esc(dispName)}</div>
+        </div>` : ''}
+        <div class="field-row">
+            <label>Switch to Theme</label>
+            <select id="m_sched_theme" style="width:100%">${themeOpts}</select>
+        </div>
+        <div class="field-row">
+            <label>Go Live Date &amp; Time</label>
+            <input type="datetime-local" id="m_sched_date" value="${tomorrowStr}" style="width:100%">
+        </div>
+        <div class="field-row">
+            <label>Notes (optional)</label>
+            <input type="text" id="m_sched_notes" placeholder="e.g. Q2 summer menu rollout" style="width:100%">
+        </div>
+    `;
+
+    modalAction = async () => {
+        const toThemeId = parseInt(document.getElementById('m_sched_theme').value);
+        const rawDate   = document.getElementById('m_sched_date').value;
+        const notes     = document.getElementById('m_sched_notes').value.trim();
+        if (!rawDate)   { setStatus('Go-live date is required', 'err'); return; }
+        if (!toThemeId) { setStatus('Select a theme', 'err'); return; }
+        const goLiveAt    = rawDate.replace('T', ' ') + ':00';
+        const fromThemeId = wgt ? wgt.themeId : null;
+        try {
+            const res  = await fetch(`${API}?action=schedule`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    storeId:  schedModalStoreId,
+                    widgetId: schedModalWidgetId,
+                    fromThemeId,
+                    toThemeId,
+                    goLiveAt,
+                    notes: notes || null,
+                }),
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            hideModal();
+            setStatus('Theme change scheduled', 'ok');
+            await loadScheduler();
+        } catch(e) {
+            setStatus('Error: ' + e.message, 'err');
+        }
+    };
+
+    document.getElementById('modalOverlay').classList.add('open');
+}
+
+init();
+</script>
+</body>
+</html>
