@@ -21,9 +21,29 @@ A custom Xibo CMS module that provides dynamic digital menu boards with per-stor
 - Xibo CMS **2.3.x** deployed via Docker Compose (the official [xibosignage/xibo-cms](https://github.com/xibosignage/xibo-docker) stack)
 - The standard Docker Compose setup bind-mounts a `shared/` directory from the host into the container. This module relies on that mount.
 
+This repo includes a ready-to-use `docker-compose.yml` and `config.env.example` if you are setting up a new Xibo instance from scratch.
+
 ---
 
 ## Installation
+
+### 0. (New installs only) Start the Docker stack
+
+If you are deploying Xibo from scratch, use the `docker-compose.yml` in this repo:
+
+```bash
+cp config.env.example config.env
+# Edit config.env — set MYSQL_PASSWORD and CMS_SERVER_NAME at minimum
+nano config.env
+
+docker compose up -d
+```
+
+The web UI will be available at `http://<host>:65501` once the containers are healthy. Change the host port in `docker-compose.yml` if `65501` is already in use.
+
+> **Note:** `config.env` is in `.gitignore` — never commit it.
+
+---
 
 ### 1. Copy files to the host shared directory
 
