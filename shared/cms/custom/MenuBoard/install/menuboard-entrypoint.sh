@@ -5,6 +5,7 @@
 
 ROUTES_FILE="/var/www/cms/lib/routes-web.php"
 SIDEBAR_FILE="/var/www/cms/views/authed-sidebar.twig"
+TOPBAR_FILE="/var/www/cms/views/authed-topbar.twig"
 
 echo "[MenuBoard] Running pre-start setup..."
 
@@ -42,6 +43,24 @@ INSERT
         && mv "${SIDEBAR_FILE}.tmp" "$SIDEBAR_FILE"
 
     rm -f /tmp/mb-sidebar-insert.txt
+fi
+
+# --- 3. Add the horizontal topbar link before the Layouts entry ---
+if [ -f "$TOPBAR_FILE" ] && ! grep -q "menuboard.editor" "$TOPBAR_FILE"; then
+    echo "[MenuBoard] Patching authed-topbar.twig..."
+
+    cat > /tmp/mb-topbar-insert.txt << 'INSERT'
+                <li><a href="{{ urlFor("menuboard.editor") }}">MenuBoard Editor</a></li>
+INSERT
+
+    awk '
+        FNR==NR { insert=$0; next }
+        /urlFor\("layout\.view"\)/ && !done { print insert; done=1 }
+        { print }
+    ' /tmp/mb-topbar-insert.txt "$TOPBAR_FILE" > "${TOPBAR_FILE}.tmp" \
+        && mv "${TOPBAR_FILE}.tmp" "$TOPBAR_FILE"
+
+    rm -f /tmp/mb-topbar-insert.txt
 fi
 
 echo "[MenuBoard] Setup complete — handing off to CMS entrypoint."

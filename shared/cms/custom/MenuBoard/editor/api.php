@@ -320,7 +320,7 @@ if ($method === 'GET' && $action === 'library') {
     $params[':offset'] = $start;
 
     $stmt = $pdo->prepare(
-        "SELECT mediaId, name, fileName, fileSize
+        "SELECT mediaId, name, originalFileName, fileSize
            FROM media
           $where
           ORDER BY name
