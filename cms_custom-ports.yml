@@ -5,22 +5,23 @@ services:
         image: mysql:5.7
         volumes:
             - "./shared/db:/var/lib/mysql:Z"
+        restart: always
         environment:
             - MYSQL_DATABASE=cms
             - MYSQL_USER=cms
             - MYSQL_RANDOM_ROOT_PASSWORD=yes
         mem_limit: 1g
         env_file: config.env
-        restart: always
     cms-xmr:
         image: xibosignage/xibo-xmr:release-0.8
         ports:
-            - "9505:9505"
+            - "65500:9505"
         restart: always
         mem_limit: 256m
         env_file: config.env
     cms-web:
         image: ghcr.io/xibosignage/xibo-cms:release-2.3.17
+        entrypoint: ["/bin/bash", "/custom-entrypoint.sh"]
         volumes:
             - "./shared/cms/custom:/var/www/cms/custom:Z"
             - "./shared/backup:/var/www/backup:Z"
@@ -28,6 +29,12 @@ services:
             - "./shared/cms/library:/var/www/cms/library:Z"
             - "./shared/cms/web/userscripts:/var/www/cms/web/userscripts:Z"
             - "./shared/cms/ca-certs:/var/www/cms/ca-certs:Z"
+            # MenuBoard: entrypoint wrapper that patches routes/sidebar on every start
+            - "./shared/cms/custom/MenuBoard/install/menuboard-entrypoint.sh:/custom-entrypoint.sh:ro,Z"
+            # MenuBoard: Apache alias so /menuboard-editor/ serves the SPA
+            - "./shared/cms/custom/MenuBoard/install/menuboard-apache.conf:/etc/apache2/conf.d/menuboard.conf:ro,Z"
+            # MenuBoard: Twig page template for the /menuboard/editor route
+            - "./shared/cms/custom/MenuBoard/install/menuboard-page.twig:/var/www/cms/views/menuboard-page.twig:ro,Z"
         restart: always
         links:
             - cms-db:mysql
@@ -36,7 +43,7 @@ services:
             - XMR_HOST=cms-xmr
         env_file: config.env
         ports:
-            - "80:80"
+            - "65501:80"
         mem_limit: 1g
     cms-quickchart:
       image: ianw/quickchart

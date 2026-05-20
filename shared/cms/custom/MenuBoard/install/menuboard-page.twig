@@ -1,0 +1,12 @@
+{% extends "authed.twig" %}
+
+{% block pageContent %}
+<div class="row">
+    <div class="col-sm-12" style="padding:0">
+        <iframe src="/menuboard-editor/index.html"
+                style="width:100%;height:calc(100vh - 110px);border:none;display:block;"
+                id="menuboard-frame">
+        </iframe>
+    </div>
+</div>
+{% endblock %}

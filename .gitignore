@@ -1,5 +1,15 @@
-*.bak
-*.swp
-*.log
-.DS_Store
-config.env
+.vagrant/
+*.env
+docker-compose.override.yml
+.idea/
+
+# Runtime data — not tracked
+shared/db/
+shared/backup/
+shared/cms/library/
+shared/cms/web/
+shared/cms/ca-certs/
+
+# Scratch files
+shared/cms/custom/MenuBoard/MenuBoard.php.bak
+.claude/

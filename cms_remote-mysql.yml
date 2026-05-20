@@ -1,24 +1,13 @@
 version: "2.1"
 
 services:
-    cms-db:
-        image: mysql:5.7
-        volumes:
-            - "./shared/db:/var/lib/mysql:Z"
-        environment:
-            - MYSQL_DATABASE=cms
-            - MYSQL_USER=cms
-            - MYSQL_RANDOM_ROOT_PASSWORD=yes
-        mem_limit: 1g
-        env_file: config.env
-        restart: always
     cms-xmr:
         image: xibosignage/xibo-xmr:release-0.8
         ports:
             - "9505:9505"
         restart: always
-        mem_limit: 256m
         env_file: config.env
+        mem_limit: 256m
     cms-web:
         image: ghcr.io/xibosignage/xibo-cms:release-2.3.17
         volumes:
@@ -30,13 +19,12 @@ services:
             - "./shared/cms/ca-certs:/var/www/cms/ca-certs:Z"
         restart: always
         links:
-            - cms-db:mysql
             - cms-xmr:50001
         environment:
             - XMR_HOST=cms-xmr
-        env_file: config.env
         ports:
             - "80:80"
+        env_file: config.env
         mem_limit: 1g
     cms-quickchart:
       image: ianw/quickchart
