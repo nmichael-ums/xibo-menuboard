@@ -334,14 +334,16 @@ class MenuBoard extends ModuleWidget
             }
         }
 
-        // Load item names for name-type slots
+        // Load item names and descriptions
         $nameRows = $this->getStore()->select(
-            "SELECT itemId, name FROM menuboard_items WHERE isActive = 1",
+            "SELECT itemId, name, description FROM menuboard_items WHERE isActive = 1",
             []
         );
-        $itemNames = [];
+        $itemNames        = [];
+        $itemDescriptions = [];
         foreach ($nameRows as $n) {
-            $itemNames[$n['itemId']] = $n['name'];
+            $itemNames[$n['itemId']]        = $n['name'];
+            $itemDescriptions[$n['itemId']] = $n['description'] ?? '';
         }
 
         // Resolve background URL - use authenticated URL in preview, storedAs for player
@@ -435,6 +437,10 @@ class MenuBoard extends ModuleWidget
 
             if ($type === 'name') {
                 $displayText = htmlspecialchars($itemNames[$itemId] ?? '', ENT_QUOTES);
+                if ($displayText === '') continue;
+                $opacity = '';
+            } elseif ($type === 'description') {
+                $displayText = htmlspecialchars($itemDescriptions[$itemId] ?? '', ENT_QUOTES);
                 if ($displayText === '') continue;
                 $opacity = '';
             } else {
