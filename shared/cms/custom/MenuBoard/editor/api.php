@@ -982,7 +982,7 @@ function applyDuePriceSchedules(PDO $pdo, int $storeId): void {
     )->execute([$storeId]);
 
     // Notify Xibo players about the changed items
-    $itemIds   = array_map(fn($r) => (int)$r['itemId'], $winners);
+    $itemIds   = array_map(function($r) { return (int)$r['itemId']; }, $winners);
     $widgetIds = widgetsByStoreAndItems($pdo, $storeId, $itemIds);
     if ($widgetIds) publishWidgets($pdo, $widgetIds, getLibraryPath($pdo));
 }
