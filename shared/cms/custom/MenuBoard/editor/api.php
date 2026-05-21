@@ -525,30 +525,6 @@ function ensureStoreTables(PDO $pdo): void {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
 
-    // One-time migration: seed from Xibo displaygroup if table is empty
-    $count = (int)$pdo->query("SELECT COUNT(*) FROM menuboard_stores")->fetchColumn();
-    if ($count === 0) {
-        try {
-            $dgs = $pdo->query(
-                "SELECT displayGroupId, displayGroup
-                   FROM displaygroup
-                  WHERE isDisplaySpecific = 0
-                  ORDER BY displayGroup"
-            )->fetchAll();
-            if (count($dgs) > 0) {
-                $stmt  = $pdo->prepare(
-                    "INSERT IGNORE INTO menuboard_stores (storeId, storeName) VALUES (?, ?)"
-                );
-                $maxId = 0;
-                foreach ($dgs as $dg) {
-                    $stmt->execute([(int)$dg['displayGroupId'], $dg['displayGroup']]);
-                    $maxId = max($maxId, (int)$dg['displayGroupId']);
-                }
-                // Advance AUTO_INCREMENT so new stores don't collide with migrated IDs
-                $pdo->exec("ALTER TABLE menuboard_stores AUTO_INCREMENT = " . ($maxId + 1));
-            }
-        } catch (\Exception $e) { /* displaygroup table may not exist in some setups */ }
-    }
 }
 
 if ($method === 'GET' && $action === 'stores') {
