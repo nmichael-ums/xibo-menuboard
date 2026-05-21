@@ -713,7 +713,7 @@ button:disabled { background: #333; color: #666; cursor: default; }
       </table>
 
       <div id="priceSchedSection">
-        <h3>Scheduled Price Changes</h3>
+        <h3>Pending Price Changes</h3>
         <table>
           <thead>
             <tr>
@@ -2376,15 +2376,12 @@ function renderPricesTable() {
         if (search && !row.name.toLowerCase().includes(search)) return false;
         return true;
     }).forEach(row => {
-        const scheds  = priceSchedByItem[row.itemId] || [];
-        const now     = new Date();
-        const pending = scheds.filter(s => new Date(s.effectiveAt.replace(' ','T')) > now);
+        const scheds = priceSchedByItem[row.itemId] || [];
 
         let clockBtn;
         if (scheds.length > 0) {
-            const bg = pending.length > 0 ? '#b06a00' : '#1a6a42';
-            clockBtn = `<button style="font-size:11px;height:24px;padding:0 6px;background:${bg};border:none;border-radius:3px;cursor:pointer;color:#fff;white-space:nowrap"
-                title="${pending.length} pending / ${scheds.length - pending.length} live"
+            clockBtn = `<button style="font-size:11px;height:24px;padding:0 6px;background:#b06a00;border:none;border-radius:3px;cursor:pointer;color:#fff;white-space:nowrap"
+                title="${scheds.length} pending change${scheds.length !== 1 ? 's' : ''}"
                 data-itemid="${row.itemId}" data-name="${esc(row.name)}" data-category="${esc(row.category)}"
                 onclick="showPriceSchedModal(this)">⏰ ${scheds.length}</button>`;
         } else {
@@ -2658,21 +2655,13 @@ async function loadPriceSchedules() {
         const tbody = document.getElementById('priceSchedTbody');
         tbody.innerHTML = '';
         if (rows.length === 0) { section.style.display = 'none'; return; }
-        const now = new Date();
         rows.forEach(r => {
-            const effDate = new Date(r.effectiveAt.replace(' ', 'T'));
-            const isPast  = effDate <= now;
-            const badge   = isPast
-                ? `<span class="ps-badge live">LIVE</span>`
-                : `<span class="ps-badge pending">PENDING</span>`;
-            const dateStr = effDate.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+            const effDate      = new Date(r.effectiveAt.replace(' ', 'T'));
+            const dateStr      = effDate.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
             const priceDisplay = r.price !== null ? '$' + parseFloat(r.price).toFixed(2) : '—';
-            const cancel = !isPast
-                ? `<button class="red" style="font-size:10px;height:20px;padding:0 6px" onclick="cancelPriceSchedule(${r.priceScheduleId})">Cancel</button>`
-                : '';
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${badge}</td>
+                <td><span class="ps-badge pending">PENDING</span></td>
                 <td>${esc(r.itemName)}</td>
                 <td style="color:#888">${esc(r.itemCategory)}</td>
                 <td>${priceDisplay}</td>
@@ -2680,7 +2669,7 @@ async function loadPriceSchedules() {
                 <td style="text-align:center">${r.isAvailable ? '✓' : '<span style="color:#d55">✗</span>'}</td>
                 <td style="color:#888">${dateStr}</td>
                 <td style="color:#666;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.notes||'')}">${esc(r.notes||'')}</td>
-                <td>${cancel}</td>
+                <td><button class="red" style="font-size:10px;height:20px;padding:0 6px" onclick="cancelPriceSchedule(${r.priceScheduleId})">Cancel</button></td>
             `;
             tbody.appendChild(tr);
         });
@@ -2709,21 +2698,16 @@ function buildPriceSchedModalBody() {
     let existingHtml = '';
     if (scheds.length > 0) {
         const rows = scheds.map(s => {
-            const effDate = new Date(s.effectiveAt.replace(' ','T'));
-            const isPast  = effDate <= now;
-            const badge   = isPast ? `<span class="ps-badge live">LIVE</span>` : `<span class="ps-badge pending">PENDING</span>`;
-            const dateStr = effDate.toLocaleString([], { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
+            const effDate      = new Date(s.effectiveAt.replace(' ','T'));
+            const dateStr      = effDate.toLocaleString([], { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
             const priceDisplay = s.price !== null ? '$' + parseFloat(s.price).toFixed(2) : '—';
-            const cancel = !isPast
-                ? `<button class="red" style="font-size:10px;height:20px;padding:0 6px;flex-shrink:0" onclick="cancelPriceSchedInModal(${s.priceScheduleId})">Cancel</button>`
-                : '';
             return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #2a2a2a;flex-wrap:wrap">
-                ${badge}
+                <span class="ps-badge pending">PENDING</span>
                 <span style="color:#aaa;font-size:12px">${dateStr}</span>
                 <span style="color:#7af;font-size:12px;font-weight:bold">${priceDisplay}</span>
                 ${s.priceLabel ? `<span style="color:#888;font-size:11px">${esc(s.priceLabel)}</span>` : ''}
                 ${s.notes ? `<span style="color:#666;font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(s.notes)}">${esc(s.notes)}</span>` : '<span style="flex:1"></span>'}
-                ${cancel}
+                <button class="red" style="font-size:10px;height:20px;padding:0 6px;flex-shrink:0" onclick="cancelPriceSchedInModal(${s.priceScheduleId})">Cancel</button>
             </div>`;
         }).join('');
         existingHtml = `

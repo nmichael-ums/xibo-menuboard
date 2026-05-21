@@ -420,6 +420,8 @@ if ($method === 'DELETE' && $action === 'item') {
 if ($method === 'GET' && $action === 'prices') {
     $storeId = (int)($_GET['storeId'] ?? 0);
 
+    applyDuePriceSchedules($pdo, $storeId);
+
     // Only filter by concepts when the store has explicit concept rows saved
     $cCount = $pdo->prepare("SELECT COUNT(*) FROM menuboard_store_concepts WHERE storeId = ?");
     $cCount->execute([$storeId]);
@@ -933,9 +935,64 @@ if ($method === 'POST' && $action === 'bulk_schedule') {
 // PRICE SCHEDULES
 // =============================================================================
 
+// Apply past-due price schedules: upsert the winning (most-recent) row per
+// item into menuboard_prices, then delete all past-due rows for the store.
+function applyDuePriceSchedules(PDO $pdo, int $storeId): void {
+    // Grab the most-recently-effective past-due row per item
+    $due = $pdo->prepare(
+        "SELECT ps.priceScheduleId, ps.itemId, ps.storeId,
+                ps.price, ps.priceLabel, ps.isAvailable
+           FROM menuboard_price_schedules ps
+           JOIN (
+               SELECT itemId, MAX(effectiveAt) AS maxEff
+                 FROM menuboard_price_schedules
+                WHERE storeId = :sid1
+                  AND effectiveAt <= NOW()
+                GROUP BY itemId
+           ) latest ON latest.itemId = ps.itemId AND latest.maxEff = ps.effectiveAt
+          WHERE ps.storeId = :sid2"
+    );
+    $due->execute([':sid1' => $storeId, ':sid2' => $storeId]);
+    $winners = $due->fetchAll();
+
+    if (!$winners) return;
+
+    $upsert = $pdo->prepare(
+        "INSERT INTO menuboard_prices (itemId, storeId, price, priceLabel, isAvailable)
+         VALUES (:itemId, :storeId, :price, :label, :avail)
+         ON DUPLICATE KEY UPDATE
+             price       = VALUES(price),
+             priceLabel  = VALUES(priceLabel),
+             isAvailable = VALUES(isAvailable)"
+    );
+    foreach ($winners as $r) {
+        $upsert->execute([
+            ':itemId'  => (int)$r['itemId'],
+            ':storeId' => (int)$r['storeId'],
+            ':price'   => $r['price'],
+            ':label'   => $r['priceLabel'],
+            ':avail'   => (int)$r['isAvailable'],
+        ]);
+    }
+
+    // Remove every past-due row for this store (not just the winners)
+    $pdo->prepare(
+        "DELETE FROM menuboard_price_schedules
+          WHERE storeId = ? AND effectiveAt <= NOW()"
+    )->execute([$storeId]);
+
+    // Notify Xibo players about the changed items
+    $itemIds   = array_map(fn($r) => (int)$r['itemId'], $winners);
+    $widgetIds = widgetsByStoreAndItems($pdo, $storeId, $itemIds);
+    if ($widgetIds) publishWidgets($pdo, $widgetIds, getLibraryPath($pdo));
+}
+
 if ($method === 'GET' && $action === 'price_schedules') {
     $storeId = (int)($_GET['storeId'] ?? 0);
     if (!$storeId) respond(['error' => 'storeId is required'], 400);
+
+    applyDuePriceSchedules($pdo, $storeId);
+
     $stmt = $pdo->prepare(
         "SELECT ps.*,
                 i.name     AS itemName,
@@ -943,7 +1000,8 @@ if ($method === 'GET' && $action === 'price_schedules') {
            FROM menuboard_price_schedules ps
            JOIN menuboard_items i ON i.itemId = ps.itemId
           WHERE ps.storeId = :storeId
-          ORDER BY ps.effectiveAt DESC, i.category, i.name"
+            AND ps.effectiveAt > NOW()
+          ORDER BY ps.effectiveAt ASC, i.category, i.name"
     );
     $stmt->execute([':storeId' => $storeId]);
     respond($stmt->fetchAll());
