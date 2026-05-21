@@ -419,26 +419,21 @@ if ($method === 'DELETE' && $action === 'item') {
 
 if ($method === 'GET' && $action === 'prices') {
     $storeId = (int)($_GET['storeId'] ?? 0);
-    // Concept filter: only apply when the store has explicit concept rows saved
-    $conceptFilter = '';
-    $hasConceptRows = (int)$pdo->prepare(
-        "SELECT COUNT(*) FROM menuboard_store_concepts WHERE storeId = ?"
-    )->execute([$storeId]) && (int)$pdo->prepare(
-        "SELECT COUNT(*) FROM menuboard_store_concepts WHERE storeId = ?"
-    )->execute([$storeId]);
 
-    $cRows = $pdo->prepare(
-        "SELECT COUNT(*) FROM menuboard_store_concepts WHERE storeId = :sid"
-    );
-    $cRows->execute([':sid' => $storeId]);
-    if ((int)$cRows->fetchColumn() > 0) {
-        $conceptFilter = "AND (i.concept = '' OR i.concept IS NULL
-                           OR EXISTS (
-                               SELECT 1 FROM menuboard_store_concepts sc
-                                WHERE sc.storeId = :storeId2
-                                  AND sc.concept = i.concept
-                                  AND sc.isEnabled = 1
-                           ))";
+    // Only filter by concepts when the store has explicit concept rows saved
+    $cCount = $pdo->prepare("SELECT COUNT(*) FROM menuboard_store_concepts WHERE storeId = ?");
+    $cCount->execute([$storeId]);
+    $conceptFilter = '';
+    $params        = [':storeId' => $storeId];
+    if ((int)$cCount->fetchColumn() > 0) {
+        $conceptFilter   = "AND (i.concept = '' OR i.concept IS NULL
+                             OR EXISTS (
+                                 SELECT 1 FROM menuboard_store_concepts sc
+                                  WHERE sc.storeId = :storeId2
+                                    AND sc.concept  = i.concept
+                                    AND sc.isEnabled = 1
+                             ))";
+        $params[':storeId2'] = $storeId;
     }
 
     $stmt = $pdo->prepare(
@@ -452,8 +447,6 @@ if ($method === 'GET' && $action === 'prices') {
           $conceptFilter
           ORDER BY i.concept, i.category, i.name"
     );
-    $params = [':storeId' => $storeId];
-    if ($conceptFilter) $params[':storeId2'] = $storeId;
     $stmt->execute($params);
     respond($stmt->fetchAll());
 }
@@ -497,7 +490,55 @@ if ($method === 'PUT' && $action === 'prices') {
 // STORES
 // =============================================================================
 
+// Ensure tables exist and seed from Xibo display groups on first use.
+function ensureStoreTables(PDO $pdo): void {
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `menuboard_stores` (
+            `storeId`   INT          NOT NULL AUTO_INCREMENT,
+            `storeName` VARCHAR(255) NOT NULL,
+            `isActive`  TINYINT(1)   NOT NULL DEFAULT 1,
+            `createdAt` DATETIME              DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`storeId`),
+            KEY `idx_active` (`isActive`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `menuboard_store_concepts` (
+            `storeId`   INT          NOT NULL,
+            `concept`   VARCHAR(100) NOT NULL,
+            `isEnabled` TINYINT(1)   NOT NULL DEFAULT 1,
+            PRIMARY KEY (`storeId`, `concept`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+
+    // One-time migration: seed from Xibo displaygroup if table is empty
+    $count = (int)$pdo->query("SELECT COUNT(*) FROM menuboard_stores")->fetchColumn();
+    if ($count === 0) {
+        try {
+            $dgs = $pdo->query(
+                "SELECT displayGroupId, displayGroup
+                   FROM displaygroup
+                  WHERE isDisplaySpecific = 0
+                  ORDER BY displayGroup"
+            )->fetchAll();
+            if (count($dgs) > 0) {
+                $stmt  = $pdo->prepare(
+                    "INSERT IGNORE INTO menuboard_stores (storeId, storeName) VALUES (?, ?)"
+                );
+                $maxId = 0;
+                foreach ($dgs as $dg) {
+                    $stmt->execute([(int)$dg['displayGroupId'], $dg['displayGroup']]);
+                    $maxId = max($maxId, (int)$dg['displayGroupId']);
+                }
+                // Advance AUTO_INCREMENT so new stores don't collide with migrated IDs
+                $pdo->exec("ALTER TABLE menuboard_stores AUTO_INCREMENT = " . ($maxId + 1));
+            }
+        } catch (\Exception $e) { /* displaygroup table may not exist in some setups */ }
+    }
+}
+
 if ($method === 'GET' && $action === 'stores') {
+    ensureStoreTables($pdo);
     $rows = $pdo->query(
         "SELECT storeId, storeName, isActive
            FROM menuboard_stores
