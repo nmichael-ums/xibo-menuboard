@@ -504,6 +504,18 @@ function ensureStoreTables(PDO $pdo): void {
             KEY `idx_active` (`isActive`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
+
+    // Add extended columns if they were not present in the initial schema
+    $extCols = [
+        'contactName'  => "ALTER TABLE menuboard_stores ADD COLUMN contactName  VARCHAR(255) NOT NULL DEFAULT ''",
+        'storeAddress' => "ALTER TABLE menuboard_stores ADD COLUMN storeAddress TEXT",
+        'phoneNumber'  => "ALTER TABLE menuboard_stores ADD COLUMN phoneNumber  VARCHAR(50)  NOT NULL DEFAULT ''",
+        'notes'        => "ALTER TABLE menuboard_stores ADD COLUMN notes        TEXT",
+    ];
+    foreach ($extCols as $sql) {
+        try { $pdo->exec($sql); } catch (\Exception $e) { /* column already exists */ }
+    }
+
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS `menuboard_store_concepts` (
             `storeId`   INT          NOT NULL,
@@ -541,13 +553,82 @@ function ensureStoreTables(PDO $pdo): void {
 
 if ($method === 'GET' && $action === 'stores') {
     ensureStoreTables($pdo);
+    $all  = !empty($_GET['all']);
+    $where = $all ? '' : 'WHERE isActive = 1';
     $rows = $pdo->query(
-        "SELECT storeId, storeName, isActive
+        "SELECT storeId, storeName, contactName, storeAddress, phoneNumber, notes, isActive
            FROM menuboard_stores
-          WHERE isActive = 1
+          $where
           ORDER BY storeName"
     )->fetchAll();
     respond($rows);
+}
+
+if ($method === 'GET' && $action === 'store') {
+    $storeId = (int)($_GET['storeId'] ?? 0);
+    if (!$storeId) respond(['error' => 'storeId required'], 400);
+    ensureStoreTables($pdo);
+    $stmt = $pdo->prepare(
+        "SELECT storeId, storeName, contactName, storeAddress, phoneNumber, notes, isActive
+           FROM menuboard_stores
+          WHERE storeId = :sid"
+    );
+    $stmt->execute([':sid' => $storeId]);
+    $store = $stmt->fetch();
+    if (!$store) respond(['error' => 'Store not found'], 404);
+    respond($store);
+}
+
+if ($method === 'PUT' && $action === 'store') {
+    $storeId = (int)($_GET['storeId'] ?? 0);
+    $body    = bodyJson();
+    if (!$storeId) respond(['error' => 'storeId required'], 400);
+
+    $sets   = [];
+    $params = [];
+
+    if (array_key_exists('storeName', $body)) {
+        $name = trim($body['storeName']);
+        if ($name === '') respond(['error' => 'storeName cannot be empty'], 400);
+        $sets[] = 'storeName = :storeName';
+        $params[':storeName'] = $name;
+    }
+    foreach (['contactName', 'storeAddress', 'phoneNumber', 'notes'] as $col) {
+        if (array_key_exists($col, $body)) {
+            $sets[]        = "$col = :$col";
+            $params[":$col"] = trim((string)$body[$col]);
+        }
+    }
+    if (array_key_exists('isActive', $body)) {
+        $sets[]          = 'isActive = :isActive';
+        $params[':isActive'] = (int)$body['isActive'];
+    }
+
+    if (!empty($sets)) {
+        $params[':sid'] = $storeId;
+        $pdo->prepare(
+            "UPDATE menuboard_stores SET " . implode(', ', $sets) . " WHERE storeId = :sid"
+        )->execute($params);
+    }
+
+    if (isset($body['concepts']) && is_array($body['concepts'])) {
+        $cStmt = $pdo->prepare(
+            "INSERT INTO menuboard_store_concepts (storeId, concept, isEnabled)
+             VALUES (:sid, :concept, :enabled)
+             ON DUPLICATE KEY UPDATE isEnabled = VALUES(isEnabled)"
+        );
+        foreach ($body['concepts'] as $c) {
+            $concept = trim($c['concept'] ?? '');
+            if ($concept === '') continue;
+            $cStmt->execute([
+                ':sid'     => $storeId,
+                ':concept' => $concept,
+                ':enabled' => (int)($c['isEnabled'] ?? 1),
+            ]);
+        }
+    }
+
+    respond(['success' => true]);
 }
 
 if ($method === 'POST' && $action === 'store') {

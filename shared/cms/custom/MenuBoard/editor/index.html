@@ -425,6 +425,30 @@ button:disabled { background: #333; color: #666; cursor: default; }
 .ps-badge { font-size:9px;font-weight:bold;letter-spacing:0.05em;padding:2px 5px;border-radius:2px; }
 .ps-badge.live    { background:#1a4020;color:#5d5; }
 .ps-badge.pending { background:#1a2040;color:#7af; }
+/* ── Stores tab ─────────────────────────────────────────── */
+#tabStores { display:none; flex:1; overflow:hidden; }
+.stores-layout { display:flex; height:100%; }
+.stores-sidebar { width:240px; min-width:180px; background:#1e1e1e; border-right:1px solid #333; display:flex; flex-direction:column; flex-shrink:0; }
+.stores-sidebar-hdr { padding:10px; border-bottom:1px solid #333; flex-shrink:0; }
+.stores-sidebar-list { flex:1; overflow-y:auto; }
+.store-list-item { padding:9px 12px; border-bottom:1px solid #252525; cursor:pointer; transition:background 0.1s; border-left:2px solid transparent; }
+.store-list-item:hover { background:#252525; }
+.store-list-item.active { background:#172a40; border-left-color:#0080ff; }
+.store-list-item.inactive-store { opacity:0.5; }
+.sli-name { font-size:12px; font-weight:bold; color:#ddd; }
+.sli-meta { font-size:10px; color:#666; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.stores-edit { flex:1; overflow-y:auto; padding:20px 24px; }
+.stores-edit-empty { color:#555; font-style:italic; font-size:13px; padding-top:40px; text-align:center; }
+#storeEditForm { max-width:560px; }
+#storeEditForm h2 { font-size:15px; color:#fff; margin-bottom:16px; }
+.se-section-label { font-size:10px; text-transform:uppercase; letter-spacing:0.1em; color:#555; margin:18px 0 8px; border-bottom:1px solid #2e2e2e; padding-bottom:4px; }
+#tabStores .field-row { margin-bottom:10px; }
+#tabStores .field-row label { font-size:12px; color:#aaa; display:block; margin-bottom:3px; }
+#tabStores .field-row input[type=text] { width:100%; }
+#tabStores textarea { background:#383838; border:1px solid #505050; color:#ddd; padding:6px 8px; border-radius:3px; font-size:12px; font-family:inherit; resize:vertical; width:100%; }
+#tabStores textarea:focus { outline:1px solid #0080ff; border-color:#0080ff; }
+.se-actions { display:flex; gap:8px; margin-top:20px; align-items:center; }
+.store-inactive-badge { font-size:9px; font-weight:bold; background:#3a2020; color:#f77; border-radius:2px; padding:1px 5px; margin-left:6px; letter-spacing:0.05em; vertical-align:middle; }
 </style>
 </head>
 <body>
@@ -456,6 +480,7 @@ button:disabled { background: #333; color: #666; cursor: default; }
   <div class="tab"        data-tab="items"  onclick="switchTab('items')">Menu Items</div>
   <div class="tab"        data-tab="prices"     onclick="switchTab('prices')">Store Prices</div>
   <div class="tab"        data-tab="scheduler"  onclick="switchTab('scheduler')">Scheduler</div>
+  <div class="tab"        data-tab="stores"     onclick="switchTab('stores')">Stores</div>
 </div>
 
 <div id="main">
@@ -734,6 +759,69 @@ button:disabled { background: #333; color: #666; cursor: default; }
     </div>
   </div>
 
+  <!-- STORES TAB -->
+  <div id="tabStores">
+    <div class="stores-layout">
+      <div class="stores-sidebar">
+        <div class="stores-sidebar-hdr">
+          <button onclick="openNewStoreModal()" style="width:100%">+ New Store</button>
+        </div>
+        <div class="stores-sidebar-list" id="storeListItems">
+          <p style="color:#555;font-style:italic;font-size:12px;padding:12px">No stores yet.</p>
+        </div>
+      </div>
+      <div class="stores-edit">
+        <div class="stores-edit-empty" id="storeEditEmpty">Select a store to view or edit its details.</div>
+        <div id="storeEditForm" style="display:none">
+          <h2 id="storeEditTitle"></h2>
+
+          <div class="se-section-label">Store Details</div>
+          <div class="field-row">
+            <label>Store Name <span style="color:#d55">*</span></label>
+            <input type="text" id="seStoreName">
+          </div>
+          <div class="field-row">
+            <label>Contact Name</label>
+            <input type="text" id="seContactName">
+          </div>
+          <div class="field-row">
+            <label>Store Address</label>
+            <input type="text" id="seStoreAddress">
+          </div>
+          <div class="field-row">
+            <label>Phone Number</label>
+            <input type="text" id="sePhoneNumber">
+          </div>
+
+          <div class="se-section-label">Concepts</div>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;font-size:11px">
+            <span style="cursor:pointer;color:#5af" onclick="seToggleAllConcepts(true)">Enable All</span>
+            <span style="cursor:pointer;color:#5af" onclick="seToggleAllConcepts(false)">Disable All</span>
+          </div>
+          <div id="seConceptList" class="concept-check-list"></div>
+
+          <div class="se-section-label">Notes</div>
+          <div class="field-row">
+            <textarea id="seNotes" rows="4" placeholder="Internal notes about this store…"></textarea>
+          </div>
+
+          <div class="se-section-label">Status</div>
+          <div class="field-row">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#aaa">
+              <input type="checkbox" id="seIsActive" style="width:14px;height:14px;accent-color:#0080ff">
+              Store is active (visible in price dropdown)
+            </label>
+          </div>
+
+          <div class="se-actions">
+            <button class="green" onclick="saveStoreDetails()">💾 Save Store</button>
+            <button class="grey"  onclick="loadStoresTab()">↻ Refresh</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- SCHEDULER TAB -->
   <div id="tabScheduler" style="display:none;flex:1">
     <div id="schedInner">
@@ -967,9 +1055,11 @@ function switchTab(name) {
     document.getElementById('tabItems').style.display     = name === 'items'     ? 'flex' : 'none';
     document.getElementById('tabPrices').style.display    = name === 'prices'    ? 'flex' : 'none';
     document.getElementById('tabScheduler').style.display = name === 'scheduler' ? 'flex' : 'none';
+    document.getElementById('tabStores').style.display    = name === 'stores'    ? 'flex' : 'none';
     if (name === 'items')     loadItems();
     if (name === 'prices')    loadPrices();
     if (name === 'scheduler') loadScheduler();
+    if (name === 'stores')    loadStoresTab();
 }
 
 // ── THEMES ────────────────────────────────────────────────────────────────────
@@ -3265,6 +3355,141 @@ function showSchedModal(storeId, widgetId) {
     };
 
     document.getElementById('modalOverlay').classList.add('open');
+}
+
+// ── STORES TAB ────────────────────────────────────────────────────────────────
+
+let storeEditId = null;
+
+async function loadStoresTab() {
+    try {
+        const res  = await fetch(`${API}?action=stores&all=1`);
+        const data = await res.json();
+        storeList  = Array.isArray(data) ? data : [];
+    } catch(e) {
+        storeList = [];
+        setStatus('Could not load stores', 'err');
+    }
+    renderStoreList();
+
+    // Refresh the prices dropdown (active only)
+    const sel  = document.getElementById('priceStoreSelect');
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">— select store —</option>';
+    storeList.filter(s => parseInt(s.isActive)).forEach(s => {
+        const o = document.createElement('option');
+        o.value = s.storeId; o.textContent = s.storeName; sel.appendChild(o);
+    });
+    if (prev && storeList.some(s => String(s.storeId) === prev)) sel.value = prev;
+    document.getElementById('btnManageConcepts').disabled = !sel.value;
+}
+
+function renderStoreList() {
+    const el = document.getElementById('storeListItems');
+    el.innerHTML = '';
+    if (!storeList.length) {
+        el.innerHTML = '<p style="color:#555;font-style:italic;font-size:12px;padding:12px">No stores yet.</p>';
+        return;
+    }
+    storeList.forEach(s => {
+        const active   = parseInt(s.isActive);
+        const isEditing = String(s.storeId) === String(storeEditId);
+        const div = document.createElement('div');
+        div.className = 'store-list-item' +
+            (isEditing ? ' active' : '') +
+            (active    ? '' : ' inactive-store');
+        let meta = '';
+        if (s.contactName)  meta += s.contactName;
+        if (s.phoneNumber)  meta += (meta ? ' · ' : '') + s.phoneNumber;
+        if (!active)        meta += (meta ? ' · ' : '') + 'INACTIVE';
+        div.innerHTML = `<div class="sli-name">${esc(s.storeName)}</div>` +
+                        (meta ? `<div class="sli-meta">${esc(meta)}</div>` : '');
+        div.onclick = () => openStoreEdit(s.storeId);
+        el.appendChild(div);
+    });
+}
+
+async function openStoreEdit(storeId) {
+    storeEditId = storeId;
+    renderStoreList();
+
+    try {
+        const [storeRes, conceptsRes] = await Promise.all([
+            fetch(`${API}?action=store&storeId=${storeId}`),
+            fetch(`${API}?action=store_concepts&storeId=${storeId}`),
+        ]);
+        const store    = await storeRes.json();
+        const concepts = await conceptsRes.json();
+
+        if (store.error) { setStatus(store.error, 'err'); return; }
+
+        document.getElementById('seStoreName').value    = store.storeName    || '';
+        document.getElementById('seContactName').value  = store.contactName  || '';
+        document.getElementById('seStoreAddress').value = store.storeAddress || '';
+        document.getElementById('sePhoneNumber').value  = store.phoneNumber  || '';
+        document.getElementById('seNotes').value        = store.notes        || '';
+        document.getElementById('seIsActive').checked   = !!parseInt(store.isActive);
+        document.getElementById('storeEditTitle').textContent = store.storeName;
+
+        const list = document.getElementById('seConceptList');
+        const cArr = Array.isArray(concepts) ? concepts : [];
+        if (cArr.length === 0) {
+            list.innerHTML = '<p style="color:#555;font-style:italic;font-size:12px">No concepts yet — add menu items first.</p>';
+        } else {
+            list.innerHTML = '';
+            cArr.forEach(c => {
+                const id  = 'sec_' + CSS.escape(c.concept);
+                const div = document.createElement('div');
+                div.className = 'concept-check-item';
+                div.innerHTML = `<input type="checkbox" id="${id}" value="${esc(c.concept)}" ${c.isEnabled ? 'checked' : ''}>
+                                 <label for="${id}">${esc(c.concept)}</label>`;
+                list.appendChild(div);
+            });
+        }
+
+        document.getElementById('storeEditEmpty').style.display = 'none';
+        document.getElementById('storeEditForm').style.display  = '';
+    } catch(e) {
+        setStatus('Failed to load store: ' + e.message, 'err');
+    }
+}
+
+function seToggleAllConcepts(state) {
+    document.querySelectorAll('#seConceptList input[type=checkbox]').forEach(cb => { cb.checked = state; });
+}
+
+async function saveStoreDetails() {
+    if (!storeEditId) return;
+    const name = document.getElementById('seStoreName').value.trim();
+    if (!name) { setStatus('Store name is required', 'err'); return; }
+
+    const checkboxes = document.querySelectorAll('#seConceptList input[type=checkbox]');
+    const concepts   = [...checkboxes].map(cb => ({ concept: cb.value, isEnabled: cb.checked ? 1 : 0 }));
+
+    const payload = {
+        storeName:    name,
+        contactName:  document.getElementById('seContactName').value.trim(),
+        storeAddress: document.getElementById('seStoreAddress').value.trim(),
+        phoneNumber:  document.getElementById('sePhoneNumber').value.trim(),
+        notes:        document.getElementById('seNotes').value.trim(),
+        isActive:     document.getElementById('seIsActive').checked ? 1 : 0,
+        concepts,
+    };
+
+    try {
+        const res  = await fetch(`${API}?action=store&storeId=${storeEditId}`, {
+            method:  'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (data.error) { setStatus(data.error, 'err'); return; }
+        document.getElementById('storeEditTitle').textContent = name;
+        await loadStoresTab();
+        setStatus(`Store "${name}" saved`, 'ok');
+    } catch(e) {
+        setStatus('Failed to save store: ' + e.message, 'err');
+    }
 }
 
 init();
