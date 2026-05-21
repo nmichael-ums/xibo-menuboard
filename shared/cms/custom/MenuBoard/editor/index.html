@@ -208,6 +208,29 @@ button:disabled { background: #333; color: #666; cursor: default; }
 #tabItems input[type=text] { width: 100%; }
 #tabPrices input[type=number] { width: 90px; }
 #tabPrices input[type=text]   { width: 130px; }
+/* ── Items table: resizable + sortable columns ────────────── */
+#itemsTable { table-layout: fixed; }
+#itemsTable th {
+    position: relative; user-select: none; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+}
+#itemsTable th.th-sort {
+    cursor: pointer;
+}
+#itemsTable th.th-sort:hover { color: #ccc; }
+#itemsTable th .sort-arrow {
+    font-size: 9px; margin-left: 4px; color: #0af; opacity: 0;
+}
+#itemsTable th.sort-asc  .sort-arrow { opacity: 1; }
+#itemsTable th.sort-asc  .sort-arrow::after { content: '▲'; }
+#itemsTable th.sort-desc .sort-arrow { opacity: 1; }
+#itemsTable th.sort-desc .sort-arrow::after { content: '▼'; }
+.col-resize-handle {
+    position: absolute; top: 0; right: 0; width: 7px; height: 100%;
+    cursor: col-resize; z-index: 1;
+}
+.col-resize-handle:hover,
+.col-resize-handle.dragging { background: rgba(0,160,255,0.25); }
 /* Modal */
 #modalOverlay {
     display: none; position: fixed; inset: 0;
@@ -610,19 +633,10 @@ button:disabled { background: #333; color: #666; cursor: default; }
       </select>
       <input type="text" id="itemFilterSearch" placeholder="Search…" style="width:120px" oninput="renderItemsTab()">
     </div>
-    <div style="flex:1;overflow-y:auto">
-      <table>
-        <thead>
-          <tr>
-            <th style="width:30px">#</th>
-            <th style="width:120px">Concept</th>
-            <th style="width:160px">Name</th>
-            <th>Description</th>
-            <th style="width:110px">Category</th>
-            <th style="width:55px">Active</th>
-            <th style="width:140px"></th>
-          </tr>
-        </thead>
+    <div style="flex:1;overflow-y:auto;overflow-x:auto">
+      <table id="itemsTable">
+        <colgroup id="itemsColgroup"></colgroup>
+        <thead id="itemsThead"></thead>
         <tbody id="itemTbody"></tbody>
       </table>
     </div>
@@ -849,6 +863,7 @@ function clearSelection() {
 async function init() {
     setupCanvasEvents();
     applyResolution();
+    initItemsTable();
     await Promise.all([loadThemes(), loadItems(), loadStores()]);
 }
 
@@ -1702,6 +1717,119 @@ function startResize(e, slot, el) {
     resizeState = { slot, el, startX: e.clientX, startY: e.clientY, origW: slot.w, origH: slot.h };
 }
 
+// ── ITEMS TABLE: columns, sort, resize ───────────────────────────────────────
+
+const ITEM_COLS = [
+    { id: 'itemId',      label: '#',           width: 30,  sortable: true,  resizable: false },
+    { id: 'concept',     label: 'Concept',     width: 120, sortable: true,  resizable: true  },
+    { id: 'name',        label: 'Name',        width: 240, sortable: true,  resizable: true  },
+    { id: 'description', label: 'Description', width: 160, sortable: true,  resizable: true  },
+    { id: 'category',    label: 'Category',    width: 110, sortable: true,  resizable: true  },
+    { id: 'isActive',    label: 'Active',      width: 55,  sortable: true,  resizable: false },
+    { id: 'actions',     label: '',            width: 140, sortable: false, resizable: false },
+];
+
+let itemSort = { col: null, dir: 'asc' };
+let colWidths = ITEM_COLS.map(c => c.width); // mutable px widths
+
+function initItemsTable() {
+    const colgroup = document.getElementById('itemsColgroup');
+    const thead    = document.getElementById('itemsThead');
+    colgroup.innerHTML = '';
+    ITEM_COLS.forEach((_, i) => {
+        const col = document.createElement('col');
+        col.style.width = colWidths[i] + 'px';
+        colgroup.appendChild(col);
+    });
+
+    const tr = document.createElement('tr');
+    ITEM_COLS.forEach((col, i) => {
+        const th = document.createElement('th');
+        th.innerHTML = `<span class="th-label">${col.label}</span><span class="sort-arrow"></span>`;
+        if (col.sortable) {
+            th.classList.add('th-sort');
+            th.addEventListener('click', e => {
+                if (e.target.classList.contains('col-resize-handle')) return;
+                sortItemsBy(col.id);
+            });
+        }
+        if (col.resizable) {
+            const handle = document.createElement('div');
+            handle.className = 'col-resize-handle';
+            handle.addEventListener('mousedown', e => startColResize(e, i));
+            th.appendChild(handle);
+        }
+        tr.appendChild(th);
+    });
+    thead.appendChild(tr);
+}
+
+function applyColWidths() {
+    const cols = document.getElementById('itemsColgroup').children;
+    colWidths.forEach((w, i) => { if (cols[i]) cols[i].style.width = w + 'px'; });
+}
+
+let colResizeState = null;
+
+function startColResize(e, colIdx) {
+    e.preventDefault();
+    e.stopPropagation();
+    const handle = e.currentTarget;
+    handle.classList.add('dragging');
+    colResizeState = { colIdx, startX: e.clientX, startW: colWidths[colIdx] };
+
+    function onMove(ev) {
+        if (!colResizeState) return;
+        const delta = ev.clientX - colResizeState.startX;
+        colWidths[colResizeState.colIdx] = Math.max(40, colResizeState.startW + delta);
+        applyColWidths();
+    }
+    function onUp() {
+        handle.classList.remove('dragging');
+        colResizeState = null;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+}
+
+function sortItemsBy(colId) {
+    if (itemSort.col === colId) {
+        itemSort.dir = itemSort.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+        itemSort.col = colId;
+        itemSort.dir = 'asc';
+    }
+    updateSortIndicators();
+    renderItemsTab();
+}
+
+function updateSortIndicators() {
+    const ths = document.querySelectorAll('#itemsThead th');
+    ITEM_COLS.forEach((col, i) => {
+        if (!ths[i]) return;
+        ths[i].classList.remove('sort-asc', 'sort-desc');
+        if (col.id === itemSort.col) {
+            ths[i].classList.add(itemSort.dir === 'asc' ? 'sort-asc' : 'sort-desc');
+        }
+    });
+}
+
+function sortedItems(list) {
+    if (!itemSort.col) return list;
+    const col = itemSort.col;
+    const dir = itemSort.dir === 'asc' ? 1 : -1;
+    return [...list].sort((a, b) => {
+        const av = a[col] ?? '';
+        const bv = b[col] ?? '';
+        if (typeof av === 'number' || (col === 'itemId' || col === 'isActive')) {
+            return (Number(av) - Number(bv)) * dir;
+        }
+        return String(av).toLowerCase().localeCompare(String(bv).toLowerCase()) * dir;
+    });
+}
+
 // ── ITEMS TAB ─────────────────────────────────────────────────────────────────
 
 async function loadItems() {
@@ -1808,12 +1936,15 @@ function renderItemsTab() {
     const tbody = document.getElementById('itemTbody');
     tbody.innerHTML = '';
 
-    items.filter(i => {
+    const filtered = items.filter(i => {
         if (concept && i.concept !== concept) return false;
         if (cat && i.category !== cat) return false;
-        if (search && !i.name.toLowerCase().includes(search)) return false;
+        if (search && !i.name.toLowerCase().includes(search) &&
+            !( i.description || '').toLowerCase().includes(search)) return false;
         return true;
-    }).forEach(item => {
+    });
+
+    sortedItems(filtered).forEach(item => {
         const tr = document.createElement('tr');
         if (parseInt(item.isActive) === 0) tr.style.opacity = '0.5';
         tr.innerHTML = `
