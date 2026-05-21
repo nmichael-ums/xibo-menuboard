@@ -419,17 +419,42 @@ if ($method === 'DELETE' && $action === 'item') {
 
 if ($method === 'GET' && $action === 'prices') {
     $storeId = (int)($_GET['storeId'] ?? 0);
-    $stmt    = $pdo->prepare(
-        "SELECT i.itemId, i.name, i.category,
+    // Concept filter: only apply when the store has explicit concept rows saved
+    $conceptFilter = '';
+    $hasConceptRows = (int)$pdo->prepare(
+        "SELECT COUNT(*) FROM menuboard_store_concepts WHERE storeId = ?"
+    )->execute([$storeId]) && (int)$pdo->prepare(
+        "SELECT COUNT(*) FROM menuboard_store_concepts WHERE storeId = ?"
+    )->execute([$storeId]);
+
+    $cRows = $pdo->prepare(
+        "SELECT COUNT(*) FROM menuboard_store_concepts WHERE storeId = :sid"
+    );
+    $cRows->execute([':sid' => $storeId]);
+    if ((int)$cRows->fetchColumn() > 0) {
+        $conceptFilter = "AND (i.concept = '' OR i.concept IS NULL
+                           OR EXISTS (
+                               SELECT 1 FROM menuboard_store_concepts sc
+                                WHERE sc.storeId = :storeId2
+                                  AND sc.concept = i.concept
+                                  AND sc.isEnabled = 1
+                           ))";
+    }
+
+    $stmt = $pdo->prepare(
+        "SELECT i.itemId, i.name, i.concept, i.category,
                 p.price, p.priceLabel, COALESCE(p.isAvailable, 1) AS isAvailable
            FROM menuboard_items i
            LEFT JOIN menuboard_prices p
                   ON p.itemId  = i.itemId
                  AND p.storeId = :storeId
           WHERE i.isActive = 1
-          ORDER BY i.category, i.name"
+          $conceptFilter
+          ORDER BY i.concept, i.category, i.name"
     );
-    $stmt->execute([':storeId' => $storeId]);
+    $params = [':storeId' => $storeId];
+    if ($conceptFilter) $params[':storeId2'] = $storeId;
+    $stmt->execute($params);
     respond($stmt->fetchAll());
 }
 
@@ -474,12 +499,126 @@ if ($method === 'PUT' && $action === 'prices') {
 
 if ($method === 'GET' && $action === 'stores') {
     $rows = $pdo->query(
-        "SELECT displayGroupId, displayGroup
-           FROM displaygroup
-          WHERE isDisplaySpecific = 0
-          ORDER BY displayGroup"
+        "SELECT storeId, storeName, isActive
+           FROM menuboard_stores
+          WHERE isActive = 1
+          ORDER BY storeName"
     )->fetchAll();
     respond($rows);
+}
+
+if ($method === 'POST' && $action === 'store') {
+    $body      = bodyJson();
+    $storeName = trim($body['storeName'] ?? '');
+    if ($storeName === '') respond(['error' => 'storeName is required'], 400);
+
+    $stmt = $pdo->prepare(
+        "INSERT INTO menuboard_stores (storeName) VALUES (:name)"
+    );
+    $stmt->execute([':name' => $storeName]);
+    $newStoreId = (int)$pdo->lastInsertId();
+
+    // Save enabled concepts
+    $concepts = $body['concepts'] ?? null;
+    if (is_array($concepts) && count($concepts) > 0) {
+        $cStmt = $pdo->prepare(
+            "INSERT INTO menuboard_store_concepts (storeId, concept, isEnabled)
+             VALUES (:sid, :concept, :enabled)
+             ON DUPLICATE KEY UPDATE isEnabled = VALUES(isEnabled)"
+        );
+        foreach ($concepts as $c) {
+            $cStmt->execute([
+                ':sid'     => $newStoreId,
+                ':concept' => trim($c['concept'] ?? ''),
+                ':enabled' => (int)($c['isEnabled'] ?? 1),
+            ]);
+        }
+    }
+
+    // Copy prices from an existing store
+    $copyFrom = (int)($body['copyPricesFrom'] ?? 0);
+    if ($copyFrom > 0) {
+        // Build concept filter for the new store
+        $enabledConcepts = [];
+        if (is_array($concepts)) {
+            foreach ($concepts as $c) {
+                if ((int)($c['isEnabled'] ?? 1)) {
+                    $enabledConcepts[] = trim($c['concept'] ?? '');
+                }
+            }
+        }
+
+        if (count($enabledConcepts) > 0) {
+            $placeholders = implode(',', array_fill(0, count($enabledConcepts), '?'));
+            $params       = array_merge([$newStoreId, $copyFrom], $enabledConcepts);
+            $pdo->prepare(
+                "INSERT IGNORE INTO menuboard_prices (itemId, storeId, price, priceLabel, isAvailable)
+                 SELECT p.itemId, ?, p.price, p.priceLabel, p.isAvailable
+                   FROM menuboard_prices p
+                   JOIN menuboard_items  i ON i.itemId = p.itemId
+                  WHERE p.storeId = ?
+                    AND i.concept IN ($placeholders)"
+            )->execute($params);
+        } else {
+            // No concept restrictions — copy all
+            $pdo->prepare(
+                "INSERT IGNORE INTO menuboard_prices (itemId, storeId, price, priceLabel, isAvailable)
+                 SELECT itemId, ?, price, priceLabel, isAvailable
+                   FROM menuboard_prices
+                  WHERE storeId = ?"
+            )->execute([$newStoreId, $copyFrom]);
+        }
+    }
+
+    respond(['storeId' => $newStoreId, 'storeName' => $storeName]);
+}
+
+if ($method === 'GET' && $action === 'store_concepts') {
+    $storeId = (int)($_GET['storeId'] ?? 0);
+    if (!$storeId) respond(['error' => 'storeId required'], 400);
+
+    // All known concepts from items
+    $allConcepts = $pdo->query(
+        "SELECT DISTINCT concept FROM menuboard_items WHERE concept != '' AND isActive = 1 ORDER BY concept"
+    )->fetchAll(PDO::FETCH_COLUMN);
+
+    // Current enabled state for this store
+    $saved = $pdo->prepare(
+        "SELECT concept, isEnabled FROM menuboard_store_concepts WHERE storeId = :sid"
+    );
+    $saved->execute([':sid' => $storeId]);
+    $savedMap = [];
+    foreach ($saved->fetchAll() as $r) {
+        $savedMap[$r['concept']] = (int)$r['isEnabled'];
+    }
+
+    $result = [];
+    foreach ($allConcepts as $c) {
+        $result[] = [
+            'concept'   => $c,
+            'isEnabled' => array_key_exists($c, $savedMap) ? $savedMap[$c] : 1,
+            'isSaved'   => array_key_exists($c, $savedMap),
+        ];
+    }
+    respond($result);
+}
+
+if ($method === 'PUT' && $action === 'store_concepts') {
+    $storeId = (int)($_GET['storeId'] ?? 0);
+    $body    = bodyJson();
+    if (!$storeId) respond(['error' => 'storeId required'], 400);
+    if (!is_array($body)) respond(['error' => 'Expected array'], 400);
+
+    $pdo->prepare("DELETE FROM menuboard_store_concepts WHERE storeId = ?")->execute([$storeId]);
+    if (count($body) > 0) {
+        $stmt = $pdo->prepare(
+            "INSERT INTO menuboard_store_concepts (storeId, concept, isEnabled) VALUES (?, ?, ?)"
+        );
+        foreach ($body as $c) {
+            $stmt->execute([$storeId, trim($c['concept'] ?? ''), (int)($c['isEnabled'] ?? 1)]);
+        }
+    }
+    respond(['ok' => true]);
 }
 
 // =============================================================================

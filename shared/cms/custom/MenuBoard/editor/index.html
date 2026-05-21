@@ -310,6 +310,37 @@ button:disabled { background: #333; color: #666; cursor: default; }
 .se-type-text  { background:#2a1a4a;color:#b8f; }
 .se-type-rect  { background:#3a2000;color:#fa6; }
 .se-type-line  { background:#003030;color:#5df; }
+/* ── New Store / Concepts modals ─────────────────────────── */
+#newStoreModal, #conceptsModal {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75); z-index: 2000;
+    align-items: flex-start; justify-content: center;
+    padding-top: 60px;
+}
+#newStoreModal.open, #conceptsModal.open { display: flex; }
+#newStoreModalInner, #conceptsModalInner {
+    background: #2a2a2a; border: 1px solid #444; border-radius: 6px;
+    width: 480px; max-width: 95vw; max-height: 80vh;
+    display: flex; flex-direction: column;
+}
+#newStoreModalInner h2, #conceptsModalInner h2 {
+    font-size: 14px; color: #fff; padding: 14px 16px;
+    border-bottom: 1px solid #444; flex-shrink: 0;
+}
+.store-modal-body { flex: 1; overflow-y: auto; padding: 14px 16px; }
+.concept-check-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.concept-check-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px; background: #222; border-radius: 3px;
+    cursor: pointer; font-size: 12px;
+}
+.concept-check-item:hover { background: #2c2c2c; }
+.concept-check-item input[type=checkbox] { accent-color: #0080ff; width: 14px; height: 14px; }
+.concept-check-item label { flex: 1; cursor: pointer; }
+.store-modal-footer {
+    padding: 10px 16px; border-top: 1px solid #3a3a3a;
+    display: flex; justify-content: flex-end; gap: 8px; flex-shrink: 0;
+}
 /* ── Bulk Add Items modal ─────────────────────────────────── */
 #bulkItemModal {
     display: none; position: fixed; inset: 0;
@@ -648,10 +679,14 @@ button:disabled { background: #333; color: #666; cursor: default; }
   <div id="tabPrices" style="display:none;flex:1;flex-direction:column;overflow:hidden">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-shrink:0;flex-wrap:wrap">
       <h2 style="font-size:14px;color:#fff">Store Prices</h2>
+      <button onclick="openNewStoreModal()">+ New Store</button>
       <label style="font-size:12px;color:#888">Store:</label>
-      <select id="priceStoreSelect" style="width:180px" onchange="loadPrices()">
+      <select id="priceStoreSelect" style="width:180px" onchange="onStoreSelectChange()">
         <option value="">— select store —</option>
       </select>
+      <button class="grey" id="btnManageConcepts" onclick="openConceptsModal()" disabled
+              style="font-size:11px;padding:0 9px" title="Enable/disable concepts for this store">Concepts…</button>
+      <span id="conceptBadge" style="font-size:11px;color:#888;display:none"></span>
       <span class="tb-sep">|</span>
       <select id="priceCatFilter" style="width:140px;font-size:12px" onchange="renderPricesTable()">
         <option value="">— all categories —</option>
@@ -747,6 +782,63 @@ button:disabled { background: #333; color: #666; cursor: default; }
     </div>
     <div class="modal-btns">
       <button class="grey" onclick="closeLibPicker()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- NEW STORE MODAL -->
+<div id="newStoreModal" onclick="closeNewStoreModalOutside(event)">
+  <div id="newStoreModalInner">
+    <h2>Create New Store</h2>
+    <div class="store-modal-body">
+      <div class="field-row" style="margin-bottom:12px">
+        <label style="font-size:11px;color:#999;display:block;margin-bottom:3px">Store Name <span style="color:#d55">*</span></label>
+        <input type="text" id="nsStoreName" style="width:100%" placeholder="">
+      </div>
+      <div class="field-row" style="margin-bottom:12px">
+        <label style="font-size:11px;color:#999;display:block;margin-bottom:3px">Copy Prices From</label>
+        <select id="nsCopyFrom" style="width:100%">
+          <option value="">— start empty —</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <label style="font-size:11px;color:#999">Enabled Concepts</label>
+          <span style="font-size:10px;color:#555">
+            <span style="cursor:pointer;color:#5af" onclick="nsToggleAllConcepts(true)">All</span>
+            &nbsp;/&nbsp;
+            <span style="cursor:pointer;color:#5af" onclick="nsToggleAllConcepts(false)">None</span>
+          </span>
+        </div>
+        <div id="nsConceptList" class="concept-check-list">
+          <p style="color:#555;font-style:italic;font-size:12px">No concepts found — add menu items first.</p>
+        </div>
+      </div>
+    </div>
+    <div class="store-modal-footer">
+      <button class="grey" onclick="closeNewStoreModal()">Cancel</button>
+      <button class="green" onclick="saveNewStore()">Create Store</button>
+    </div>
+  </div>
+</div>
+
+<!-- MANAGE CONCEPTS MODAL -->
+<div id="conceptsModal" onclick="closeConceptsModalOutside(event)">
+  <div id="conceptsModalInner">
+    <h2>Enabled Concepts — <span id="conceptsModalStoreName" style="color:#aaa"></span></h2>
+    <div class="store-modal-body">
+      <p style="font-size:11px;color:#666;margin-bottom:10px">
+        Items from disabled concepts are hidden in the price table for this store.
+      </p>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;font-size:11px">
+        <span style="cursor:pointer;color:#5af" onclick="cmToggleAll(true)">Enable All</span>
+        <span style="cursor:pointer;color:#5af" onclick="cmToggleAll(false)">Disable All</span>
+      </div>
+      <div id="cmConceptList" class="concept-check-list"></div>
+    </div>
+    <div class="store-modal-footer">
+      <button class="grey" onclick="closeConceptsModal()">Cancel</button>
+      <button class="green" onclick="saveStoreConcepts()">Save</button>
     </div>
   </div>
 </div>
@@ -2062,17 +2154,177 @@ async function deleteItem(itemId) {
 
 // ── PRICES TAB ────────────────────────────────────────────────────────────────
 
+let storeList = []; // [{storeId, storeName}]
+
 async function loadStores() {
-    const res    = await fetch(`${API}?action=stores`);
-    const stores = await res.json();
-    const sel    = document.getElementById('priceStoreSelect');
+    const res  = await fetch(`${API}?action=stores`);
+    storeList  = await res.json();
+    const sel  = document.getElementById('priceStoreSelect');
+    const prev = sel.value;
     sel.innerHTML = '<option value="">— select store —</option>';
-    stores.forEach(s => {
+    storeList.forEach(s => {
         const o = document.createElement('option');
-        o.value = s.displayGroupId;
-        o.textContent = s.displayGroup;
+        o.value       = s.storeId;
+        o.textContent = s.storeName;
         sel.appendChild(o);
     });
+    if (prev && storeList.some(s => String(s.storeId) === prev)) sel.value = prev;
+    document.getElementById('btnManageConcepts').disabled = !sel.value;
+}
+
+async function onStoreSelectChange() {
+    const hasStore = !!document.getElementById('priceStoreSelect').value;
+    document.getElementById('btnManageConcepts').disabled = !hasStore;
+    document.getElementById('conceptBadge').style.display = 'none';
+    if (hasStore) await refreshConceptBadge();
+    loadPrices();
+}
+
+async function refreshConceptBadge() {
+    const storeId = document.getElementById('priceStoreSelect').value;
+    if (!storeId) return;
+    try {
+        const res      = await fetch(`${API}?action=store_concepts&storeId=${storeId}`);
+        const concepts = await res.json();
+        if (!Array.isArray(concepts) || concepts.length === 0) {
+            document.getElementById('conceptBadge').style.display = 'none';
+            return;
+        }
+        const enabled = concepts.filter(c => c.isEnabled).length;
+        const badge   = document.getElementById('conceptBadge');
+        badge.textContent   = `${enabled}/${concepts.length} concepts active`;
+        badge.style.color   = enabled < concepts.length ? '#f90' : '#888';
+        badge.style.display = '';
+    } catch(e) { /* silent */ }
+}
+
+// ── NEW STORE MODAL ───────────────────────────────────────────────────────────
+
+function openNewStoreModal() {
+    document.getElementById('nsStoreName').value = '';
+    // Populate copy-from dropdown
+    const copyFrom = document.getElementById('nsCopyFrom');
+    copyFrom.innerHTML = '<option value="">— start empty —</option>';
+    storeList.forEach(s => {
+        const o = document.createElement('option');
+        o.value = s.storeId; o.textContent = s.storeName; copyFrom.appendChild(o);
+    });
+    // Build concept checklist from known items
+    const concepts = [...new Set(items.map(i => i.concept).filter(Boolean))].sort();
+    const list = document.getElementById('nsConceptList');
+    if (concepts.length === 0) {
+        list.innerHTML = '<p style="color:#555;font-style:italic;font-size:12px">No concepts found — add menu items first.</p>';
+    } else {
+        list.innerHTML = '';
+        concepts.forEach(c => {
+            const id  = 'nsc_' + CSS.escape(c);
+            const div = document.createElement('div');
+            div.className = 'concept-check-item';
+            div.innerHTML = `<input type="checkbox" id="${id}" value="${esc(c)}" checked>
+                             <label for="${id}">${esc(c)}</label>`;
+            list.appendChild(div);
+        });
+    }
+    document.getElementById('newStoreModal').classList.add('open');
+    document.getElementById('nsStoreName').focus();
+}
+
+function closeNewStoreModal() {
+    document.getElementById('newStoreModal').classList.remove('open');
+}
+
+function closeNewStoreModalOutside(e) {
+    if (e.target === document.getElementById('newStoreModal')) closeNewStoreModal();
+}
+
+function nsToggleAllConcepts(state) {
+    document.querySelectorAll('#nsConceptList input[type=checkbox]').forEach(cb => { cb.checked = state; });
+}
+
+async function saveNewStore() {
+    const name = document.getElementById('nsStoreName').value.trim();
+    if (!name) { setStatus('Store name is required', 'err'); return; }
+
+    const checkboxes = document.querySelectorAll('#nsConceptList input[type=checkbox]');
+    const concepts   = [...checkboxes].map(cb => ({ concept: cb.value, isEnabled: cb.checked ? 1 : 0 }));
+    const copyFrom   = parseInt(document.getElementById('nsCopyFrom').value) || 0;
+
+    try {
+        const res  = await fetch(`${API}?action=store`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ storeName: name, concepts, copyPricesFrom: copyFrom }),
+        });
+        const data = await res.json();
+        if (data.error) { setStatus(data.error, 'err'); return; }
+        closeNewStoreModal();
+        await loadStores();
+        document.getElementById('priceStoreSelect').value = data.storeId;
+        await onStoreSelectChange();
+        setStatus(`Store "${name}" created`, 'ok');
+    } catch(e) {
+        setStatus('Failed to create store: ' + e.message, 'err');
+    }
+}
+
+// ── MANAGE CONCEPTS MODAL ─────────────────────────────────────────────────────
+
+async function openConceptsModal() {
+    const storeId = document.getElementById('priceStoreSelect').value;
+    if (!storeId) return;
+    const storeName = storeList.find(s => String(s.storeId) === String(storeId))?.storeName || `Store #${storeId}`;
+    document.getElementById('conceptsModalStoreName').textContent = storeName;
+
+    try {
+        const res      = await fetch(`${API}?action=store_concepts&storeId=${storeId}`);
+        const concepts = await res.json();
+        const list     = document.getElementById('cmConceptList');
+        if (!Array.isArray(concepts) || concepts.length === 0) {
+            list.innerHTML = '<p style="color:#555;font-style:italic;font-size:12px">No concepts found — add menu items first.</p>';
+        } else {
+            list.innerHTML = '';
+            concepts.forEach(c => {
+                const id  = 'cmc_' + CSS.escape(c.concept);
+                const div = document.createElement('div');
+                div.className = 'concept-check-item';
+                div.innerHTML = `<input type="checkbox" id="${id}" value="${esc(c.concept)}" ${c.isEnabled ? 'checked' : ''}>
+                                 <label for="${id}">${esc(c.concept)}</label>`;
+                list.appendChild(div);
+            });
+        }
+        document.getElementById('conceptsModal').classList.add('open');
+    } catch(e) {
+        setStatus('Failed to load concepts: ' + e.message, 'err');
+    }
+}
+
+function closeConceptsModal() {
+    document.getElementById('conceptsModal').classList.remove('open');
+}
+
+function closeConceptsModalOutside(e) {
+    if (e.target === document.getElementById('conceptsModal')) closeConceptsModal();
+}
+
+function cmToggleAll(state) {
+    document.querySelectorAll('#cmConceptList input[type=checkbox]').forEach(cb => { cb.checked = state; });
+}
+
+async function saveStoreConcepts() {
+    const storeId    = document.getElementById('priceStoreSelect').value;
+    const checkboxes = document.querySelectorAll('#cmConceptList input[type=checkbox]');
+    const concepts   = [...checkboxes].map(cb => ({ concept: cb.value, isEnabled: cb.checked ? 1 : 0 }));
+    try {
+        await fetch(`${API}?action=store_concepts&storeId=${storeId}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(concepts),
+        });
+        closeConceptsModal();
+        await refreshConceptBadge();
+        await loadPrices();
+        setStatus('Concepts saved', 'ok');
+    } catch(e) {
+        setStatus('Failed to save concepts: ' + e.message, 'err');
+    }
 }
 
 let priceAllRows     = [];

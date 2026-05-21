@@ -127,6 +127,26 @@ class MenuBoard extends ModuleWidget
             $pdo->exec("ALTER TABLE menuboard_schedules ADD COLUMN appliedAt DATETIME DEFAULT NULL AFTER notes");
         } catch (\Exception $e) { /* already exists */ }
 
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `menuboard_stores` (
+                `storeId`   INT          NOT NULL AUTO_INCREMENT,
+                `storeName` VARCHAR(255) NOT NULL,
+                `isActive`  TINYINT(1)   NOT NULL DEFAULT 1,
+                `createdAt` DATETIME              DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (`storeId`),
+                KEY `idx_active` (`isActive`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ");
+
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `menuboard_store_concepts` (
+                `storeId`   INT          NOT NULL,
+                `concept`   VARCHAR(100) NOT NULL,
+                `isEnabled` TINYINT(1)   NOT NULL DEFAULT 1,
+                PRIMARY KEY (`storeId`, `concept`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ");
+
         $count = $pdo->query("SELECT COUNT(*) FROM `menuboard_themes`")->fetchColumn();
         if ((int)$count === 0) {
             $stmt = $pdo->prepare(
