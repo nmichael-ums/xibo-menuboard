@@ -755,8 +755,8 @@ if ($method === 'GET' && $action === 'widgets') {
              w.widgetId,
              CAST(wo_store.value AS UNSIGNED) AS storeId,
              CAST(wo_theme.value AS UNSIGNED) AS themeId,
-             COALESCE(dg.displayGroup, CONCAT('Store #', wo_store.value)) AS storeName,
-             COALESCE(mt.themeName,    CONCAT('Theme #', wo_theme.value))  AS themeName,
+             COALESCE(ms.storeName, CONCAT('Store #', wo_store.value)) AS storeName,
+             COALESCE(mt.themeName, CONCAT('Theme #', wo_theme.value))  AS themeName,
              l.layoutId,
              l.layout AS layoutName,
              GROUP_CONCAT(d.display ORDER BY d.display SEPARATOR ', ') AS displayNames
@@ -768,8 +768,8 @@ if ($method === 'GET' && $action === 'widgets') {
            JOIN playlist p  ON p.playlistId  = w.playlistId
            JOIN region r    ON r.regionId    = p.regionId
            JOIN layout l    ON l.layoutId    = r.layoutId
-           LEFT JOIN displaygroup dg
-             ON dg.displayGroupId = CAST(wo_store.value AS UNSIGNED)
+           LEFT JOIN menuboard_stores ms
+             ON ms.storeId = CAST(wo_store.value AS UNSIGNED)
            LEFT JOIN menuboard_themes mt
              ON mt.themeId = CAST(wo_theme.value AS UNSIGNED)
            LEFT JOIN display d
@@ -777,7 +777,7 @@ if ($method === 'GET' && $action === 'widgets') {
           WHERE w.type = 'menuboard'
             AND (l.parentId IS NULL OR l.parentId = '' OR l.parentId = 0)
           GROUP BY w.widgetId, wo_store.value, wo_theme.value,
-                   dg.displayGroup, mt.themeName, l.layoutId, l.layout
+                   ms.storeName, mt.themeName, l.layoutId, l.layout
           ORDER BY storeName, l.layout"
     );
     respond($stmt->fetchAll());
