@@ -3818,6 +3818,7 @@ async function openApiKeysPanel() {
     renderStoreList();
     document.getElementById('storeEditEmpty').style.display = 'none';
     document.getElementById('storeEditForm').style.display  = 'none';
+    document.getElementById('groupsPanel').style.display    = 'none';
     document.getElementById('apiKeysPanel').style.display   = 'block';
     await loadApiKeys();
 }
