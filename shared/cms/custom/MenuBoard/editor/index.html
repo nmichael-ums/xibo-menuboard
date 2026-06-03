@@ -310,6 +310,39 @@ button:disabled { background: #333; color: #666; cursor: default; }
 .se-type-text  { background:#2a1a4a;color:#b8f; }
 .se-type-rect  { background:#3a2000;color:#fa6; }
 .se-type-line  { background:#003030;color:#5df; }
+/* ── API Keys panel ──────────────────────────────────── */
+.api-keys-panel { flex:1; overflow-y:auto; padding:20px 24px; display:none; }
+.api-keys-panel > h2 { font-size:15px; color:#fff; margin-bottom:6px; }
+.api-keys-panel > p  { font-size:12px; color:#666; margin-bottom:16px; }
+#apiKeysTable { width:100%; border-collapse:collapse; font-size:12px; }
+#apiKeysTable th { text-align:left; color:#666; font-weight:normal; padding:6px 8px; border-bottom:1px solid #2e2e2e; white-space:nowrap; }
+#apiKeysTable td { padding:8px 8px; border-bottom:1px solid #252525; vertical-align:middle; }
+#apiKeysTable tr:hover td { background:#1a1a1a; }
+.ak-label { color:#ddd; font-weight:bold; }
+.ak-store { color:#888; font-size:11px; }
+.ak-date  { color:#555; font-size:11px; white-space:nowrap; }
+/* ── New Key modal ───────────────────────────────────── */
+#newKeyModal, #keyRevealModal {
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,0.78); z-index:2000;
+    align-items:flex-start; justify-content:center; padding-top:80px;
+}
+#newKeyModal.open, #keyRevealModal.open { display:flex; }
+#newKeyModalInner, #keyRevealModalInner {
+    background:#2a2a2a; border:1px solid #444; border-radius:6px;
+    width:420px; max-width:95vw;
+}
+#newKeyModalInner h2, #keyRevealModalInner h2 {
+    font-size:14px; color:#fff; padding:14px 16px; border-bottom:1px solid #444; margin:0;
+}
+.key-modal-body { padding:14px 16px; }
+.key-modal-footer { padding:10px 16px; border-top:1px solid #3a3a3a; display:flex; justify-content:flex-end; gap:8px; }
+.key-reveal-box {
+    background:#111; border:1px solid #333; border-radius:4px;
+    padding:10px 12px; font-family:monospace; font-size:12px; color:#5af;
+    word-break:break-all; margin:10px 0; user-select:all; cursor:text;
+}
+.key-reveal-warning { font-size:11px; color:#f90; margin-bottom:4px; }
 /* ── New Store / Concepts modals ─────────────────────────── */
 #newStoreModal, #conceptsModal {
     display: none; position: fixed; inset: 0;
@@ -765,6 +798,7 @@ button:disabled { background: #333; color: #666; cursor: default; }
       <div class="stores-sidebar">
         <div class="stores-sidebar-hdr">
           <button onclick="openNewStoreModal()" style="width:100%">+ New Store</button>
+          <button class="grey" onclick="openApiKeysPanel()" style="width:100%;margin-top:6px;font-size:11px">🔑 API Keys</button>
         </div>
         <div class="stores-sidebar-list" id="storeListItems">
           <p style="color:#555;font-style:italic;font-size:12px;padding:12px">No stores yet.</p>
@@ -772,6 +806,27 @@ button:disabled { background: #333; color: #666; cursor: default; }
       </div>
       <div class="stores-edit">
         <div class="stores-edit-empty" id="storeEditEmpty">Select a store to view or edit its details.</div>
+        <div id="apiKeysPanel" class="api-keys-panel">
+          <h2>POS API Keys</h2>
+          <p>API keys allow external POS systems to push price updates via Bearer token authentication. Each key can be scoped to a specific store.</p>
+          <div style="margin-bottom:12px">
+            <button onclick="openNewKeyModal()">+ New Key</button>
+          </div>
+          <table id="apiKeysTable">
+            <thead>
+              <tr>
+                <th>Label</th>
+                <th>Store Scope</th>
+                <th>Created</th>
+                <th>Last Used</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="apiKeysTbody">
+              <tr><td colspan="5" style="color:#555;font-style:italic;padding:16px 0">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
         <div id="storeEditForm" style="display:none">
           <h2 id="storeEditTitle"></h2>
 
@@ -970,6 +1025,51 @@ button:disabled { background: #333; color: #666; cursor: default; }
         <button class="grey" onclick="closeBulkItemModal()">Cancel</button>
         <button class="green" onclick="saveBulkItems()">💾 Save All Items</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- NEW API KEY MODAL -->
+<div id="newKeyModal" onclick="closeNewKeyModalOutside(event)">
+  <div id="newKeyModalInner">
+    <h2>Create API Key</h2>
+    <div class="key-modal-body">
+      <div class="field-row" style="margin-bottom:12px">
+        <label style="font-size:11px;color:#999;display:block;margin-bottom:3px">Label <span style="color:#d55">*</span></label>
+        <input type="text" id="nkLabel" style="width:100%" placeholder="e.g. Main POS System">
+      </div>
+      <div class="field-row">
+        <label style="font-size:11px;color:#999;display:block;margin-bottom:3px">Store Scope</label>
+        <select id="nkStore" style="width:100%">
+          <option value="">All stores</option>
+        </select>
+        <p style="font-size:10px;color:#555;margin-top:4px">Restrict this key to a single store, or leave as "All stores" for full access.</p>
+      </div>
+    </div>
+    <div class="key-modal-footer">
+      <button class="grey" onclick="closeNewKeyModal()">Cancel</button>
+      <button class="green" onclick="saveNewKey()">Create Key</button>
+    </div>
+  </div>
+</div>
+
+<!-- KEY REVEAL MODAL -->
+<div id="keyRevealModal" onclick="closeKeyRevealModalOutside(event)">
+  <div id="keyRevealModalInner">
+    <h2>API Key Created — <span id="keyRevealLabel" style="color:#aaa"></span></h2>
+    <div class="key-modal-body">
+      <p class="key-reveal-warning">⚠ Save this key now. It will not be shown again.</p>
+      <div class="key-reveal-box" id="keyRevealBox"></div>
+      <div style="display:flex;justify-content:flex-end">
+        <button id="btnCopyKey" onclick="copyApiKey()">Copy</button>
+      </div>
+      <p style="font-size:11px;color:#666;margin-top:12px">
+        Use this key in the <code style="color:#aaa">Authorization</code> header:<br>
+        <code style="color:#888;font-size:11px">Authorization: Bearer &lt;key&gt;</code>
+      </p>
+    </div>
+    <div class="key-modal-footer">
+      <button class="green" onclick="closeKeyRevealModal()">Done</button>
     </div>
   </div>
 </div>
@@ -1903,10 +2003,11 @@ function startResize(e, slot, el) {
 
 const ITEM_COLS = [
     { id: 'itemId',      label: '#',           width: 30,  sortable: true,  resizable: false },
-    { id: 'concept',     label: 'Concept',     width: 120, sortable: true,  resizable: true  },
-    { id: 'name',        label: 'Name',        width: 240, sortable: true,  resizable: true  },
-    { id: 'description', label: 'Description', width: 160, sortable: true,  resizable: true  },
-    { id: 'category',    label: 'Category',    width: 110, sortable: true,  resizable: true  },
+    { id: 'concept',     label: 'Concept',     width: 110, sortable: true,  resizable: true  },
+    { id: 'posCode',     label: 'POS Code',    width: 90,  sortable: true,  resizable: true  },
+    { id: 'name',        label: 'Name',        width: 200, sortable: true,  resizable: true  },
+    { id: 'description', label: 'Description', width: 150, sortable: true,  resizable: true  },
+    { id: 'category',    label: 'Category',    width: 100, sortable: true,  resizable: true  },
     { id: 'isActive',    label: 'Active',      width: 55,  sortable: true,  resizable: false },
     { id: 'actions',     label: '',            width: 140, sortable: false, resizable: false },
 ];
@@ -2132,6 +2233,7 @@ function renderItemsTab() {
         tr.innerHTML = `
             <td style="color:#666">${item.itemId}</td>
             <td><input type="text" value="${esc(item.concept||'')}" data-field="concept" data-id="${item.itemId}" list="conceptOptions" oninput="markDirty(this)"></td>
+            <td><input type="text" value="${esc(item.posCode||'')}" data-field="posCode" data-id="${item.itemId}" placeholder="SKU…" oninput="markDirty(this)" style="font-family:monospace;font-size:11px"></td>
             <td><input type="text" value="${esc(item.name)}" data-field="name" data-id="${item.itemId}" oninput="markDirty(this)"></td>
             <td><input type="text" value="${esc(item.description||'')}" data-field="description" data-id="${item.itemId}" oninput="markDirty(this)"></td>
             <td><input type="text" list="categoryOptions" value="${esc(item.category)}" data-field="category" data-id="${item.itemId}" oninput="markDirty(this)"></td>
@@ -2180,6 +2282,7 @@ async function saveAllItems() {
             method: 'PUT', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 concept:     g('concept').value.trim(),
+                posCode:     g('posCode').value.trim(),
                 name,
                 description: g('description').value.trim(),
                 category:    g('category').value.trim(),
@@ -2202,6 +2305,7 @@ async function saveItem(itemId, btn) {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             concept:     g('concept').value.trim(),
+            posCode:     g('posCode').value.trim(),
             name,
             description: g('description').value.trim(),
             category:    g('category').value.trim(),
@@ -3361,7 +3465,7 @@ function showSchedModal(storeId, widgetId) {
 
 let storeEditId = null;
 
-async function loadStoresTab() {
+async function loadStoresTab(preserveView = false) {
     try {
         const res  = await fetch(`${API}?action=stores&all=1`);
         const data = await res.json();
@@ -3371,6 +3475,12 @@ async function loadStoresTab() {
         setStatus('Could not load stores', 'err');
     }
     renderStoreList();
+    if (!preserveView) {
+        storeEditId = null;
+        document.getElementById('storeEditEmpty').style.display = '';
+        document.getElementById('storeEditForm').style.display  = 'none';
+        document.getElementById('apiKeysPanel').style.display   = 'none';
+    }
 
     // Refresh the prices dropdown (active only)
     const sel  = document.getElementById('priceStoreSelect');
@@ -3412,6 +3522,7 @@ function renderStoreList() {
 async function openStoreEdit(storeId) {
     storeEditId = storeId;
     renderStoreList();
+    document.getElementById('apiKeysPanel').style.display = 'none';
 
     try {
         const [storeRes, conceptsRes] = await Promise.all([
@@ -3485,10 +3596,129 @@ async function saveStoreDetails() {
         const data = await res.json();
         if (data.error) { setStatus(data.error, 'err'); return; }
         document.getElementById('storeEditTitle').textContent = name;
-        await loadStoresTab();
+        await loadStoresTab(true);
         setStatus(`Store "${name}" saved`, 'ok');
     } catch(e) {
         setStatus('Failed to save store: ' + e.message, 'err');
+    }
+}
+
+// ── API KEYS ──────────────────────────────────────────────────────────────────
+
+async function openApiKeysPanel() {
+    storeEditId = null;
+    renderStoreList();
+    document.getElementById('storeEditEmpty').style.display = 'none';
+    document.getElementById('storeEditForm').style.display  = 'none';
+    document.getElementById('apiKeysPanel').style.display   = '';
+    await loadApiKeys();
+}
+
+async function loadApiKeys() {
+    try {
+        const res  = await fetch(`${API}?action=api_keys`);
+        const keys = await res.json();
+        const tbody = document.getElementById('apiKeysTbody');
+        if (!Array.isArray(keys) || keys.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="color:#555;font-style:italic;padding:16px 0">No API keys yet.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = keys.map(k => `
+            <tr>
+                <td><span class="ak-label">${esc(k.keyLabel)}</span></td>
+                <td class="ak-store">${k.storeName ? esc(k.storeName) : '<span style="color:#444">All stores</span>'}</td>
+                <td class="ak-date">${k.createdAt  ? fmtDate(k.createdAt)  : '—'}</td>
+                <td class="ak-date">${k.lastUsedAt ? fmtDate(k.lastUsedAt) : '<span style="color:#444">Never</span>'}</td>
+                <td style="text-align:right">
+                  ${parseInt(k.isActive)
+                    ? `<button class="red" style="font-size:10px;height:22px;padding:0 8px" onclick="revokeKey(${k.keyId})">Revoke</button>`
+                    : '<span style="color:#444;font-size:11px">Revoked</span>'}
+                </td>
+            </tr>`).join('');
+    } catch(e) {
+        setStatus('Failed to load API keys: ' + e.message, 'err');
+    }
+}
+
+function fmtDate(s) {
+    if (!s) return '—';
+    return new Date(s.replace(' ', 'T')).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+async function revokeKey(keyId) {
+    if (!confirm('Revoke this API key? Any POS system using it will immediately lose access.')) return;
+    try {
+        await fetch(`${API}?action=api_key&keyId=${keyId}`, { method: 'DELETE' });
+        await loadApiKeys();
+        setStatus('API key revoked', 'ok');
+    } catch(e) {
+        setStatus('Failed to revoke key: ' + e.message, 'err');
+    }
+}
+
+function openNewKeyModal() {
+    document.getElementById('nkLabel').value = '';
+    const sel = document.getElementById('nkStore');
+    sel.innerHTML = '<option value="">All stores</option>';
+    storeList.filter(s => parseInt(s.isActive)).forEach(s => {
+        const o = document.createElement('option');
+        o.value = s.storeId; o.textContent = s.storeName; sel.appendChild(o);
+    });
+    document.getElementById('newKeyModal').classList.add('open');
+    document.getElementById('nkLabel').focus();
+}
+
+function closeNewKeyModal() {
+    document.getElementById('newKeyModal').classList.remove('open');
+}
+
+function closeNewKeyModalOutside(e) {
+    if (e.target === document.getElementById('newKeyModal')) closeNewKeyModal();
+}
+
+async function saveNewKey() {
+    const label   = document.getElementById('nkLabel').value.trim();
+    const storeVal = document.getElementById('nkStore').value;
+    if (!label) { setStatus('Key label is required', 'err'); return; }
+    try {
+        const res  = await fetch(`${API}?action=api_key`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ keyLabel: label, storeId: storeVal ? parseInt(storeVal) : null }),
+        });
+        const data = await res.json();
+        if (data.error) { setStatus(data.error, 'err'); return; }
+        closeNewKeyModal();
+        await loadApiKeys();
+        openKeyRevealModal(data.key, data.keyLabel);
+    } catch(e) {
+        setStatus('Failed to create key: ' + e.message, 'err');
+    }
+}
+
+function openKeyRevealModal(key, label) {
+    document.getElementById('keyRevealLabel').textContent = label;
+    document.getElementById('keyRevealBox').textContent   = key;
+    document.getElementById('btnCopyKey').textContent     = 'Copy';
+    document.getElementById('keyRevealModal').classList.add('open');
+}
+
+function closeKeyRevealModal() {
+    document.getElementById('keyRevealModal').classList.remove('open');
+}
+
+function closeKeyRevealModalOutside(e) {
+    if (e.target === document.getElementById('keyRevealModal')) closeKeyRevealModal();
+}
+
+async function copyApiKey() {
+    const key = document.getElementById('keyRevealBox').textContent;
+    try {
+        await navigator.clipboard.writeText(key);
+        const btn = document.getElementById('btnCopyKey');
+        btn.textContent = '✓ Copied';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+    } catch(e) {
+        setStatus('Copy failed — select and copy manually', 'err');
     }
 }
 

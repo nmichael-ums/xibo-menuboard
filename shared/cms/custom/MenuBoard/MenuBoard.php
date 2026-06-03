@@ -147,6 +147,38 @@ class MenuBoard extends ModuleWidget
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         ");
 
+        try {
+            $pdo->exec("ALTER TABLE menuboard_items ADD COLUMN posCode VARCHAR(100) NOT NULL DEFAULT '' AFTER concept");
+        } catch (\Exception $e) { /* already exists */ }
+
+        try {
+            $pdo->exec("ALTER TABLE menuboard_stores ADD COLUMN contactName  VARCHAR(255) NOT NULL DEFAULT '' AFTER storeName");
+        } catch (\Exception $e) { /* already exists */ }
+        try {
+            $pdo->exec("ALTER TABLE menuboard_stores ADD COLUMN storeAddress TEXT AFTER contactName");
+        } catch (\Exception $e) { /* already exists */ }
+        try {
+            $pdo->exec("ALTER TABLE menuboard_stores ADD COLUMN phoneNumber  VARCHAR(50)  NOT NULL DEFAULT '' AFTER storeAddress");
+        } catch (\Exception $e) { /* already exists */ }
+        try {
+            $pdo->exec("ALTER TABLE menuboard_stores ADD COLUMN notes        TEXT AFTER phoneNumber");
+        } catch (\Exception $e) { /* already exists */ }
+
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `menuboard_api_keys` (
+                `keyId`      INT          NOT NULL AUTO_INCREMENT,
+                `keyLabel`   VARCHAR(255) NOT NULL,
+                `keyHash`    VARCHAR(64)  NOT NULL,
+                `storeId`    INT                   DEFAULT NULL,
+                `isActive`   TINYINT(1)   NOT NULL DEFAULT 1,
+                `createdAt`  DATETIME              DEFAULT CURRENT_TIMESTAMP,
+                `lastUsedAt` DATETIME              DEFAULT NULL,
+                PRIMARY KEY (`keyId`),
+                UNIQUE KEY `uq_hash` (`keyHash`),
+                KEY `idx_active` (`isActive`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ");
+
         $count = $pdo->query("SELECT COUNT(*) FROM `menuboard_themes`")->fetchColumn();
         if ((int)$count === 0) {
             $stmt = $pdo->prepare(

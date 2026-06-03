@@ -2,7 +2,7 @@
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
 set_exception_handler(function (Throwable $e) {
     http_response_code(500);
@@ -183,6 +183,90 @@ function widgetsByStoreAndItems(PDO $pdo, int $storeId, array $itemIds): array {
 }
 
 // =============================================================================
+// API KEY AUTH HELPERS
+// =============================================================================
+
+function ensureApiKeyTable(PDO $pdo): void {
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `menuboard_api_keys` (
+            `keyId`      INT          NOT NULL AUTO_INCREMENT,
+            `keyLabel`   VARCHAR(255) NOT NULL,
+            `keyHash`    VARCHAR(64)  NOT NULL,
+            `storeId`    INT                   DEFAULT NULL,
+            `isActive`   TINYINT(1)   NOT NULL DEFAULT 1,
+            `createdAt`  DATETIME              DEFAULT CURRENT_TIMESTAMP,
+            `lastUsedAt` DATETIME              DEFAULT NULL,
+            PRIMARY KEY (`keyId`),
+            UNIQUE KEY `uq_hash` (`keyHash`),
+            KEY `idx_active` (`isActive`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+}
+
+// Validates Bearer token, updates lastUsedAt, returns key row. Exits with 401 on failure.
+function requirePosAuth(PDO $pdo): array {
+    ensureApiKeyTable($pdo);
+    $header = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    if (!preg_match('/^Bearer\s+(\S+)$/i', $header, $m)) {
+        respond(['error' => 'Missing or invalid Authorization header. Expected: Authorization: Bearer <key>'], 401);
+    }
+    $hash = hash('sha256', $m[1]);
+    $stmt = $pdo->prepare(
+        "SELECT keyId, keyLabel, storeId FROM menuboard_api_keys WHERE keyHash = :h AND isActive = 1 LIMIT 1"
+    );
+    $stmt->execute([':h' => $hash]);
+    $key = $stmt->fetch();
+    if (!$key) respond(['error' => 'Invalid or revoked API key'], 401);
+    $pdo->prepare("UPDATE menuboard_api_keys SET lastUsedAt = NOW() WHERE keyId = :kid")
+        ->execute([':kid' => $key['keyId']]);
+    return $key;
+}
+
+// Batch-resolve an array of item objects (each has posCode or itemId) to itemIds.
+// Returns ['resolved' => [inputIndex => itemId], 'notFound' => [...]]
+function resolvePosItems(PDO $pdo, array $items): array {
+    $posCodes = [];
+    $itemIds  = [];
+    foreach ($items as $i) {
+        if (!empty($i['posCode']))  $posCodes[] = trim((string)$i['posCode']);
+        elseif (!empty($i['itemId'])) $itemIds[] = (int)$i['itemId'];
+    }
+
+    $codeMap = [];
+    if (!empty($posCodes)) {
+        $ph   = implode(',', array_fill(0, count($posCodes), '?'));
+        $stmt = $pdo->prepare("SELECT itemId, posCode FROM menuboard_items WHERE posCode IN ($ph) AND isActive = 1");
+        $stmt->execute($posCodes);
+        foreach ($stmt->fetchAll() as $r) $codeMap[$r['posCode']] = (int)$r['itemId'];
+    }
+
+    $idSet = [];
+    if (!empty($itemIds)) {
+        $ph   = implode(',', array_fill(0, count($itemIds), '?'));
+        $stmt = $pdo->prepare("SELECT itemId FROM menuboard_items WHERE itemId IN ($ph) AND isActive = 1");
+        $stmt->execute($itemIds);
+        foreach ($stmt->fetchAll() as $r) $idSet[(int)$r['itemId']] = true;
+    }
+
+    $resolved = [];
+    $notFound = [];
+    foreach ($items as $idx => $i) {
+        if (!empty($i['posCode'])) {
+            $code = trim((string)$i['posCode']);
+            if (isset($codeMap[$code])) $resolved[$idx] = $codeMap[$code];
+            else $notFound[] = ['posCode' => $code];
+        } elseif (!empty($i['itemId'])) {
+            $id = (int)$i['itemId'];
+            if (isset($idSet[$id])) $resolved[$idx] = $id;
+            else $notFound[] = ['itemId' => $id];
+        } else {
+            $notFound[] = ['index' => $idx, 'error' => 'missing posCode and itemId'];
+        }
+    }
+    return ['resolved' => $resolved, 'notFound' => $notFound];
+}
+
+// =============================================================================
 // THEMES
 // =============================================================================
 
@@ -353,7 +437,7 @@ if ($method === 'GET' && $action === 'items') {
     $all   = !empty($_GET['all']);
     $where = $all ? '' : 'WHERE isActive = 1';
     $stmt  = $pdo->query(
-        "SELECT itemId, clientId, concept, name, category, description, isActive
+        "SELECT itemId, clientId, concept, posCode, name, category, description, isActive
            FROM menuboard_items
            $where
           ORDER BY concept, category, name"
@@ -375,15 +459,16 @@ if ($method === 'POST' && $action === 'item') {
     $name = trim($body['name'] ?? '');
     if ($name === '') respond(['error' => 'name is required'], 400);
     $stmt = $pdo->prepare(
-        "INSERT INTO menuboard_items (clientId, concept, name, description, category, isActive)
-         VALUES (:cid, :concept, :name, :desc, :cat, 1)"
+        "INSERT INTO menuboard_items (clientId, concept, posCode, name, description, category, isActive)
+         VALUES (:cid, :concept, :posCode, :name, :desc, :cat, 1)"
     );
     $stmt->execute([
-        ':cid'     => (int)($body['clientId']    ?? 0),
-        ':concept' => trim($body['concept']       ?? ''),
+        ':cid'     => (int)($body['clientId']   ?? 0),
+        ':concept' => trim($body['concept']      ?? ''),
+        ':posCode' => trim($body['posCode']      ?? ''),
         ':name'    => $name,
-        ':desc'    => trim($body['description']  ?? ''),
-        ':cat'     => trim($body['category']     ?? ''),
+        ':desc'    => trim($body['description'] ?? ''),
+        ':cat'     => trim($body['category']    ?? ''),
     ]);
     respond(['itemId' => (int)$pdo->lastInsertId()], 201);
 }
@@ -395,6 +480,7 @@ if ($method === 'PUT' && $action === 'item') {
     $sets   = [];
     $params = [':id' => $id];
     if (array_key_exists('concept',     $body)) { $sets[] = 'concept     = :concept'; $params[':concept'] = trim($body['concept']); }
+    if (array_key_exists('posCode',     $body)) { $sets[] = 'posCode     = :posCode'; $params[':posCode'] = trim($body['posCode']); }
     if (array_key_exists('name',        $body)) { $sets[] = 'name        = :name';    $params[':name']    = trim($body['name']); }
     if (array_key_exists('description', $body)) { $sets[] = 'description = :desc';    $params[':desc']    = trim($body['description']); }
     if (array_key_exists('category',    $body)) { $sets[] = 'category    = :cat';     $params[':cat']     = trim($body['category']); }
@@ -719,6 +805,48 @@ if ($method === 'PUT' && $action === 'store_concepts') {
         }
     }
     respond(['ok' => true]);
+}
+
+// =============================================================================
+// API KEY MANAGEMENT (editor only — no Bearer auth required)
+// =============================================================================
+
+if ($method === 'GET' && $action === 'api_keys') {
+    ensureApiKeyTable($pdo);
+    $rows = $pdo->query(
+        "SELECT k.keyId, k.keyLabel, k.storeId, s.storeName, k.isActive, k.createdAt, k.lastUsedAt
+           FROM menuboard_api_keys k
+           LEFT JOIN menuboard_stores s ON s.storeId = k.storeId
+          ORDER BY k.createdAt DESC"
+    )->fetchAll();
+    respond($rows);
+}
+
+if ($method === 'POST' && $action === 'api_key') {
+    ensureApiKeyTable($pdo);
+    $body    = bodyJson();
+    $label   = trim($body['keyLabel'] ?? '');
+    $storeId = (isset($body['storeId']) && $body['storeId'] !== null && $body['storeId'] !== '')
+               ? (int)$body['storeId'] : null;
+    if ($label === '') respond(['error' => 'keyLabel is required'], 400);
+
+    $raw  = 'mbk_' . rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+    $hash = hash('sha256', $raw);
+
+    $pdo->prepare("INSERT INTO menuboard_api_keys (keyLabel, keyHash, storeId) VALUES (:label, :hash, :sid)")
+        ->execute([':label' => $label, ':hash' => $hash, ':sid' => $storeId]);
+
+    // Return plaintext key once — it is not stored and cannot be retrieved again
+    respond(['keyId' => (int)$pdo->lastInsertId(), 'keyLabel' => $label, 'key' => $raw, 'storeId' => $storeId], 201);
+}
+
+if ($method === 'DELETE' && $action === 'api_key') {
+    ensureApiKeyTable($pdo);
+    $keyId = (int)($_GET['keyId'] ?? 0);
+    if (!$keyId) respond(['error' => 'keyId required'], 400);
+    $pdo->prepare("UPDATE menuboard_api_keys SET isActive = 0 WHERE keyId = :kid")
+        ->execute([':kid' => $keyId]);
+    respond(['success' => true]);
 }
 
 // =============================================================================
@@ -1099,6 +1227,174 @@ if ($method === 'DELETE' && $action === 'price_schedule') {
     $pdo->prepare("DELETE FROM menuboard_price_schedules WHERE priceScheduleId = :id")
         ->execute([':id' => $id]);
     respond(['success' => true]);
+}
+
+// =============================================================================
+// POS API — external price updates via Bearer token
+// =============================================================================
+
+// Catalog endpoint: lets POS discover itemId/posCode mappings for a store
+if ($method === 'GET' && $action === 'pos_items') {
+    $key     = requirePosAuth($pdo);
+    $storeId = (int)($_GET['storeId'] ?? 0);
+    if (!$storeId) respond(['error' => 'storeId is required'], 400);
+    if ($key['storeId'] !== null && (int)$key['storeId'] !== $storeId) {
+        respond(['error' => 'API key not authorized for this store'], 403);
+    }
+    $stmt = $pdo->prepare(
+        "SELECT i.itemId, i.posCode, i.name, i.concept, i.category,
+                p.price, p.priceLabel, COALESCE(p.isAvailable, 1) AS isAvailable
+           FROM menuboard_items i
+           LEFT JOIN menuboard_prices p ON p.itemId = i.itemId AND p.storeId = :sid
+          WHERE i.isActive = 1
+          ORDER BY i.concept, i.category, i.name"
+    );
+    $stmt->execute([':sid' => $storeId]);
+    respond($stmt->fetchAll());
+}
+
+// Update prices for one or more items
+if ($method === 'PUT' && $action === 'pos_prices') {
+    $key  = requirePosAuth($pdo);
+    $body = bodyJson();
+
+    $storeId = (int)($body['storeId'] ?? 0);
+    $items   = $body['items'] ?? [];
+    if (!$storeId)                    respond(['error' => 'storeId is required'], 400);
+    if (!is_array($items) || !$items) respond(['error' => 'items array is required'], 400);
+    if ($key['storeId'] !== null && (int)$key['storeId'] !== $storeId) {
+        respond(['error' => 'API key not authorized for this store'], 403);
+    }
+
+    $res    = resolvePosItems($pdo, $items);
+    $upsert = $pdo->prepare(
+        "INSERT INTO menuboard_prices (itemId, storeId, price, priceLabel, isAvailable)
+         VALUES (:itemId, :storeId, :price, :label, :avail)
+         ON DUPLICATE KEY UPDATE
+             price       = VALUES(price),
+             priceLabel  = VALUES(priceLabel),
+             isAvailable = VALUES(isAvailable)"
+    );
+    $updatedIds = [];
+    foreach ($res['resolved'] as $idx => $itemId) {
+        $i = $items[$idx];
+        $upsert->execute([
+            ':itemId'  => $itemId,
+            ':storeId' => $storeId,
+            ':price'   => isset($i['price']) && $i['price'] !== null && $i['price'] !== '' ? (float)$i['price'] : null,
+            ':label'   => isset($i['priceLabel']) && $i['priceLabel'] !== null ? trim((string)$i['priceLabel']) : null,
+            ':avail'   => isset($i['isAvailable']) ? (int)(bool)$i['isAvailable'] : 1,
+        ]);
+        $updatedIds[] = $itemId;
+    }
+    $widgetIds = widgetsByStoreAndItems($pdo, $storeId, $updatedIds);
+    $published = $widgetIds ? publishWidgets($pdo, $widgetIds, getLibraryPath($pdo)) : [];
+    respond([
+        'updated'          => count($updatedIds),
+        'notFound'         => $res['notFound'],
+        'publishedLayouts' => count($published),
+    ]);
+}
+
+// Update only availability (86 items) without changing prices
+if ($method === 'PUT' && $action === 'pos_availability') {
+    $key  = requirePosAuth($pdo);
+    $body = bodyJson();
+
+    $storeId = (int)($body['storeId'] ?? 0);
+    $items   = $body['items'] ?? [];
+    if (!$storeId)                    respond(['error' => 'storeId is required'], 400);
+    if (!is_array($items) || !$items) respond(['error' => 'items array is required'], 400);
+    if ($key['storeId'] !== null && (int)$key['storeId'] !== $storeId) {
+        respond(['error' => 'API key not authorized for this store'], 403);
+    }
+
+    $res    = resolvePosItems($pdo, $items);
+    $upsert = $pdo->prepare(
+        "INSERT INTO menuboard_prices (itemId, storeId, isAvailable)
+         VALUES (:itemId, :storeId, :avail)
+         ON DUPLICATE KEY UPDATE isAvailable = VALUES(isAvailable)"
+    );
+    $updatedIds = [];
+    foreach ($res['resolved'] as $idx => $itemId) {
+        $avail = isset($items[$idx]['isAvailable']) ? (int)(bool)$items[$idx]['isAvailable'] : 1;
+        $upsert->execute([':itemId' => $itemId, ':storeId' => $storeId, ':avail' => $avail]);
+        $updatedIds[] = $itemId;
+    }
+    $widgetIds = widgetsByStoreAndItems($pdo, $storeId, $updatedIds);
+    $published = $widgetIds ? publishWidgets($pdo, $widgetIds, getLibraryPath($pdo)) : [];
+    respond([
+        'updated'          => count($updatedIds),
+        'notFound'         => $res['notFound'],
+        'publishedLayouts' => count($published),
+    ]);
+}
+
+// Full price-sheet replacement — items omitted from payload become isAvailable=0
+if ($method === 'PUT' && $action === 'pos_prices_bulk') {
+    $key  = requirePosAuth($pdo);
+    $body = bodyJson();
+
+    $storeId = (int)($body['storeId'] ?? 0);
+    $items   = $body['items'] ?? [];
+    if (!$storeId)         respond(['error' => 'storeId is required'], 400);
+    if (!is_array($items)) respond(['error' => 'items must be an array'], 400);
+    if ($key['storeId'] !== null && (int)$key['storeId'] !== $storeId) {
+        respond(['error' => 'API key not authorized for this store'], 403);
+    }
+
+    $res    = resolvePosItems($pdo, $items);
+    $upsert = $pdo->prepare(
+        "INSERT INTO menuboard_prices (itemId, storeId, price, priceLabel, isAvailable)
+         VALUES (:itemId, :storeId, :price, :label, :avail)
+         ON DUPLICATE KEY UPDATE
+             price       = VALUES(price),
+             priceLabel  = VALUES(priceLabel),
+             isAvailable = VALUES(isAvailable)"
+    );
+    $updatedIds = [];
+    foreach ($res['resolved'] as $idx => $itemId) {
+        $i = $items[$idx];
+        $upsert->execute([
+            ':itemId'  => $itemId,
+            ':storeId' => $storeId,
+            ':price'   => isset($i['price']) && $i['price'] !== null && $i['price'] !== '' ? (float)$i['price'] : null,
+            ':label'   => isset($i['priceLabel']) && $i['priceLabel'] !== null ? trim((string)$i['priceLabel']) : null,
+            ':avail'   => isset($i['isAvailable']) ? (int)(bool)$i['isAvailable'] : 1,
+        ]);
+        $updatedIds[] = $itemId;
+    }
+
+    // Items already tracked for this store but absent from the payload go unavailable
+    $unavailableIds = [];
+    if (!empty($updatedIds)) {
+        $ph   = implode(',', array_fill(0, count($updatedIds), '?'));
+        $stmt = $pdo->prepare(
+            "SELECT itemId FROM menuboard_prices WHERE storeId = ? AND itemId NOT IN ($ph)"
+        );
+        $stmt->execute(array_merge([$storeId], $updatedIds));
+    } else {
+        $stmt = $pdo->prepare("SELECT itemId FROM menuboard_prices WHERE storeId = ?");
+        $stmt->execute([$storeId]);
+    }
+    $unavailableIds = array_column($stmt->fetchAll(), 'itemId');
+
+    if (!empty($unavailableIds)) {
+        $markUnavail = $pdo->prepare(
+            "UPDATE menuboard_prices SET isAvailable = 0 WHERE storeId = ? AND itemId = ?"
+        );
+        foreach ($unavailableIds as $id) $markUnavail->execute([$storeId, $id]);
+    }
+
+    $allAffected = array_merge($updatedIds, array_map('intval', $unavailableIds));
+    $widgetIds   = widgetsByStoreAndItems($pdo, $storeId, $allAffected);
+    $published   = $widgetIds ? publishWidgets($pdo, $widgetIds, getLibraryPath($pdo)) : [];
+    respond([
+        'updated'           => count($updatedIds),
+        'markedUnavailable' => count($unavailableIds),
+        'notFound'          => $res['notFound'],
+        'publishedLayouts'  => count($published),
+    ]);
 }
 
 respond(['error' => 'Unknown action: ' . $action], 400);
