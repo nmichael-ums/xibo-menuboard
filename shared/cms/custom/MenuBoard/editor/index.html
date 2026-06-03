@@ -343,6 +343,28 @@ button:disabled { background: #333; color: #666; cursor: default; }
     word-break:break-all; margin:10px 0; user-select:all; cursor:text;
 }
 .key-reveal-warning { font-size:11px; color:#f90; margin-bottom:4px; }
+/* ── Store Groups panel ──────────────────────────────── */
+#groupsTable { width:100%; border-collapse:collapse; font-size:12px; }
+#groupsTable th { text-align:left; color:#666; font-weight:normal; padding:6px 8px; border-bottom:1px solid #2e2e2e; white-space:nowrap; }
+#groupsTable td { padding:8px 8px; border-bottom:1px solid #252525; vertical-align:middle; }
+#groupsTable tr:hover td { background:#1a1a1a; }
+.grp-name  { color:#ddd; font-weight:bold; }
+.grp-desc  { color:#666; font-size:11px; }
+.grp-stores{ color:#888; font-size:11px; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* ── Group modal ─────────────────────────────────────── */
+#groupModal {
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,0.78); z-index:2000;
+    align-items:flex-start; justify-content:center; padding-top:60px;
+}
+#groupModal.open { display:flex; }
+#groupModalInner {
+    background:#2a2a2a; border:1px solid #444; border-radius:6px;
+    width:500px; max-width:95vw; max-height:82vh; display:flex; flex-direction:column;
+}
+#groupModalInner h2 { font-size:14px; color:#fff; padding:14px 16px; border-bottom:1px solid #444; margin:0; flex-shrink:0; }
+.gm-body { flex:1; overflow-y:auto; padding:14px 16px; }
+.gm-footer { padding:10px 16px; border-top:1px solid #3a3a3a; display:flex; align-items:center; gap:8px; flex-shrink:0; }
 /* ── New Store / Concepts modals ─────────────────────────── */
 #newStoreModal, #conceptsModal {
     display: none; position: fixed; inset: 0;
@@ -798,6 +820,7 @@ button:disabled { background: #333; color: #666; cursor: default; }
       <div class="stores-sidebar">
         <div class="stores-sidebar-hdr">
           <button onclick="openNewStoreModal()" style="width:100%">+ New Store</button>
+          <button class="grey" onclick="openGroupsPanel()" style="width:100%;margin-top:6px;font-size:11px">📁 Groups</button>
           <button class="grey" onclick="openApiKeysPanel()" style="width:100%;margin-top:6px;font-size:11px">🔑 API Keys</button>
         </div>
         <div class="stores-sidebar-list" id="storeListItems">
@@ -806,6 +829,26 @@ button:disabled { background: #333; color: #666; cursor: default; }
       </div>
       <div class="stores-edit">
         <div class="stores-edit-empty" id="storeEditEmpty">Select a store to view or edit its details.</div>
+        <div id="groupsPanel" class="api-keys-panel">
+          <h2>Store Groups</h2>
+          <p>Group stores together for bulk POS updates, franchise owner organization, or concept groupings.</p>
+          <div style="margin-bottom:12px">
+            <button onclick="openGroupModal()">+ New Group</button>
+          </div>
+          <table id="groupsTable">
+            <thead>
+              <tr>
+                <th>Group Name</th>
+                <th>Description</th>
+                <th>Member Stores</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="groupsTbody">
+              <tr><td colspan="4" style="color:#555;font-style:italic;padding:16px 0">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
         <div id="apiKeysPanel" class="api-keys-panel">
           <h2>POS API Keys</h2>
           <p>API keys allow external POS systems to push price updates via Bearer token authentication. Each key can be scoped to a specific store.</p>
@@ -1029,6 +1072,32 @@ button:disabled { background: #333; color: #666; cursor: default; }
   </div>
 </div>
 
+<!-- GROUP MODAL (create / edit) -->
+<div id="groupModal" onclick="closeGroupModalOutside(event)">
+  <div id="groupModalInner">
+    <h2 id="groupModalTitle">New Group</h2>
+    <div class="gm-body">
+      <div class="field-row" style="margin-bottom:12px">
+        <label style="font-size:11px;color:#999;display:block;margin-bottom:3px">Group Name <span style="color:#d55">*</span></label>
+        <input type="text" id="gmName" style="width:100%" placeholder="e.g. Dickey's BBQ POS, North Region">
+      </div>
+      <div class="field-row" style="margin-bottom:14px">
+        <label style="font-size:11px;color:#999;display:block;margin-bottom:3px">Description</label>
+        <input type="text" id="gmDesc" style="width:100%" placeholder="Optional note about this group">
+      </div>
+      <div class="se-section-label">Member Stores</div>
+      <div id="gmStoreList" class="concept-check-list" style="max-height:220px;overflow-y:auto">
+        <p style="color:#555;font-size:12px;font-style:italic">Loading stores…</p>
+      </div>
+    </div>
+    <div class="gm-footer">
+      <button class="red" id="gmDeleteBtn" onclick="deleteGroup()" style="display:none;margin-right:auto">Delete Group</button>
+      <button class="grey" onclick="closeGroupModal()">Cancel</button>
+      <button class="green" onclick="saveGroup()">Save Group</button>
+    </div>
+  </div>
+</div>
+
 <!-- NEW API KEY MODAL -->
 <div id="newKeyModal" onclick="closeNewKeyModalOutside(event)">
   <div id="newKeyModalInner">
@@ -1039,11 +1108,13 @@ button:disabled { background: #333; color: #666; cursor: default; }
         <input type="text" id="nkLabel" style="width:100%" placeholder="e.g. Main POS System">
       </div>
       <div class="field-row">
-        <label style="font-size:11px;color:#999;display:block;margin-bottom:3px">Store Scope</label>
-        <select id="nkStore" style="width:100%">
+        <label style="font-size:11px;color:#999;display:block;margin-bottom:3px">Scope</label>
+        <select id="nkScope" style="width:100%">
           <option value="">All stores</option>
+          <optgroup label="Groups" id="nkScopeGroups"></optgroup>
+          <optgroup label="Individual Stores" id="nkScopeStores"></optgroup>
         </select>
-        <p style="font-size:10px;color:#555;margin-top:4px">Restrict this key to a single store, or leave as "All stores" for full access.</p>
+        <p style="font-size:10px;color:#555;margin-top:4px">Restrict to a group, a single store, or leave unrestricted.</p>
       </div>
     </div>
     <div class="key-modal-footer">
@@ -3479,6 +3550,7 @@ async function loadStoresTab(preserveView = false) {
         storeEditId = null;
         document.getElementById('storeEditEmpty').style.display = '';
         document.getElementById('storeEditForm').style.display  = 'none';
+        document.getElementById('groupsPanel').style.display    = 'none';
         document.getElementById('apiKeysPanel').style.display   = 'none';
     }
 
@@ -3522,6 +3594,7 @@ function renderStoreList() {
 async function openStoreEdit(storeId) {
     storeEditId = storeId;
     renderStoreList();
+    document.getElementById('groupsPanel').style.display  = 'none';
     document.getElementById('apiKeysPanel').style.display = 'none';
 
     try {
@@ -3603,6 +3676,141 @@ async function saveStoreDetails() {
     }
 }
 
+// ── STORE GROUPS ──────────────────────────────────────────────────────────────
+
+let groupList = []; // [{groupId, groupName, storeCount, storeNames}]
+
+async function openGroupsPanel() {
+    storeEditId = null;
+    renderStoreList();
+    document.getElementById('storeEditEmpty').style.display = 'none';
+    document.getElementById('storeEditForm').style.display  = 'none';
+    document.getElementById('apiKeysPanel').style.display   = 'none';
+    document.getElementById('groupsPanel').style.display    = 'block';
+    await loadGroups();
+}
+
+async function loadGroups() {
+    try {
+        const res  = await fetch(`${API}?action=api_groups`);
+        groupList  = await res.json();
+        const tbody = document.getElementById('groupsTbody');
+        if (!Array.isArray(groupList) || groupList.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="color:#555;font-style:italic;padding:16px 0">No groups yet.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = groupList.map(g => `
+            <tr>
+                <td><span class="grp-name">${esc(g.groupName)}</span></td>
+                <td class="grp-desc">${g.description ? esc(g.description) : '<span style="color:#444">—</span>'}</td>
+                <td class="grp-stores" title="${esc(g.storeNames||'')}">${g.storeCount} store${g.storeCount != 1 ? 's' : ''}${g.storeNames ? ': ' + esc(g.storeNames) : ''}</td>
+                <td style="text-align:right">
+                  <button class="grey" style="font-size:10px;height:22px;padding:0 8px" onclick="openGroupModal(${g.groupId})">Edit</button>
+                </td>
+            </tr>`).join('');
+    } catch(e) {
+        setStatus('Failed to load groups: ' + e.message, 'err');
+    }
+}
+
+let editingGroupId = null;
+
+async function openGroupModal(groupId = null) {
+    editingGroupId = groupId;
+    document.getElementById('groupModalTitle').textContent = groupId ? 'Edit Group' : 'New Group';
+    document.getElementById('gmDeleteBtn').style.display   = groupId ? '' : 'none';
+    document.getElementById('gmName').value = '';
+    document.getElementById('gmDesc').value = '';
+
+    // Populate store checklist
+    const list = document.getElementById('gmStoreList');
+    const allStores = storeList.length ? storeList : await fetch(`${API}?action=stores&all=1`).then(r => r.json());
+    let checkedIds = new Set();
+
+    if (groupId) {
+        try {
+            const [groupRes] = await Promise.all([
+                fetch(`${API}?action=api_group&groupId=${groupId}`)
+            ]);
+            const group = await groupRes.json();
+            if (group.error) { setStatus(group.error, 'err'); return; }
+            document.getElementById('gmName').value = group.groupName || '';
+            document.getElementById('gmDesc').value = group.description || '';
+            checkedIds = new Set(group.storeIds.map(Number));
+        } catch(e) {
+            setStatus('Failed to load group: ' + e.message, 'err'); return;
+        }
+    }
+
+    if (!allStores.length) {
+        list.innerHTML = '<p style="color:#555;font-size:12px;font-style:italic">No stores found.</p>';
+    } else {
+        list.innerHTML = '';
+        allStores.forEach(s => {
+            const id  = 'gms_' + s.storeId;
+            const div = document.createElement('div');
+            div.className = 'concept-check-item';
+            div.innerHTML = `<input type="checkbox" id="${id}" value="${s.storeId}" ${checkedIds.has(parseInt(s.storeId)) ? 'checked' : ''}>
+                             <label for="${id}">${esc(s.storeName)}${!parseInt(s.isActive) ? ' <span style="color:#f77;font-size:10px">(inactive)</span>' : ''}</label>`;
+            list.appendChild(div);
+        });
+    }
+
+    document.getElementById('groupModal').classList.add('open');
+    document.getElementById('gmName').focus();
+}
+
+function closeGroupModal() {
+    document.getElementById('groupModal').classList.remove('open');
+}
+
+function closeGroupModalOutside(e) {
+    if (e.target === document.getElementById('groupModal')) closeGroupModal();
+}
+
+async function saveGroup() {
+    const name     = document.getElementById('gmName').value.trim();
+    const desc     = document.getElementById('gmDesc').value.trim();
+    const storeIds = [...document.querySelectorAll('#gmStoreList input[type=checkbox]:checked')]
+                       .map(cb => parseInt(cb.value));
+    if (!name) { setStatus('Group name is required', 'err'); return; }
+
+    const payload = { groupName: name, description: desc || null, storeIds };
+    try {
+        if (editingGroupId) {
+            await fetch(`${API}?action=api_group&groupId=${editingGroupId}`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            setStatus(`Group "${name}" saved`, 'ok');
+        } else {
+            await fetch(`${API}?action=api_group`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            setStatus(`Group "${name}" created`, 'ok');
+        }
+        closeGroupModal();
+        await loadGroups();
+    } catch(e) {
+        setStatus('Failed to save group: ' + e.message, 'err');
+    }
+}
+
+async function deleteGroup() {
+    if (!editingGroupId) return;
+    const name = document.getElementById('gmName').value.trim();
+    if (!confirm(`Delete group "${name}"? This cannot be undone.`)) return;
+    try {
+        await fetch(`${API}?action=api_group&groupId=${editingGroupId}`, { method: 'DELETE' });
+        closeGroupModal();
+        await loadGroups();
+        setStatus(`Group deleted`, 'ok');
+    } catch(e) {
+        setStatus('Failed to delete group: ' + e.message, 'err');
+    }
+}
+
 // ── API KEYS ──────────────────────────────────────────────────────────────────
 
 async function openApiKeysPanel() {
@@ -3610,7 +3818,7 @@ async function openApiKeysPanel() {
     renderStoreList();
     document.getElementById('storeEditEmpty').style.display = 'none';
     document.getElementById('storeEditForm').style.display  = 'none';
-    document.getElementById('apiKeysPanel').style.display   = '';
+    document.getElementById('apiKeysPanel').style.display   = 'block';
     await loadApiKeys();
 }
 
@@ -3623,10 +3831,14 @@ async function loadApiKeys() {
             tbody.innerHTML = '<tr><td colspan="5" style="color:#555;font-style:italic;padding:16px 0">No API keys yet.</td></tr>';
             return;
         }
-        tbody.innerHTML = keys.map(k => `
+        tbody.innerHTML = keys.map(k => {
+            let scope = '<span style="color:#444">All stores</span>';
+            if (k.groupName) scope = '📁 ' + esc(k.groupName);
+            else if (k.storeName) scope = esc(k.storeName);
+            return `
             <tr>
                 <td><span class="ak-label">${esc(k.keyLabel)}</span></td>
-                <td class="ak-store">${k.storeName ? esc(k.storeName) : '<span style="color:#444">All stores</span>'}</td>
+                <td class="ak-store">${scope}</td>
                 <td class="ak-date">${k.createdAt  ? fmtDate(k.createdAt)  : '—'}</td>
                 <td class="ak-date">${k.lastUsedAt ? fmtDate(k.lastUsedAt) : '<span style="color:#444">Never</span>'}</td>
                 <td style="text-align:right">
@@ -3634,7 +3846,8 @@ async function loadApiKeys() {
                     ? `<button class="red" style="font-size:10px;height:22px;padding:0 8px" onclick="revokeKey(${k.keyId})">Revoke</button>`
                     : '<span style="color:#444;font-size:11px">Revoked</span>'}
                 </td>
-            </tr>`).join('');
+            </tr>`;
+        }).join('');
     } catch(e) {
         setStatus('Failed to load API keys: ' + e.message, 'err');
     }
@@ -3658,12 +3871,21 @@ async function revokeKey(keyId) {
 
 function openNewKeyModal() {
     document.getElementById('nkLabel').value = '';
-    const sel = document.getElementById('nkStore');
-    sel.innerHTML = '<option value="">All stores</option>';
+    const scopeGroups = document.getElementById('nkScopeGroups');
+    const scopeStores = document.getElementById('nkScopeStores');
+    scopeGroups.innerHTML = '';
+    scopeStores.innerHTML = '';
+    groupList.forEach(g => {
+        const o = document.createElement('option');
+        o.value = 'g:' + g.groupId;
+        o.textContent = g.groupName + (g.storeCount > 0 ? ` (${g.storeCount} stores)` : '');
+        scopeGroups.appendChild(o);
+    });
     storeList.filter(s => parseInt(s.isActive)).forEach(s => {
         const o = document.createElement('option');
-        o.value = s.storeId; o.textContent = s.storeName; sel.appendChild(o);
+        o.value = 's:' + s.storeId; o.textContent = s.storeName; scopeStores.appendChild(o);
     });
+    document.getElementById('nkScope').value = '';
     document.getElementById('newKeyModal').classList.add('open');
     document.getElementById('nkLabel').focus();
 }
@@ -3677,13 +3899,16 @@ function closeNewKeyModalOutside(e) {
 }
 
 async function saveNewKey() {
-    const label   = document.getElementById('nkLabel').value.trim();
-    const storeVal = document.getElementById('nkStore').value;
+    const label    = document.getElementById('nkLabel').value.trim();
+    const scopeVal = document.getElementById('nkScope').value;
     if (!label) { setStatus('Key label is required', 'err'); return; }
+    const payload  = { keyLabel: label, storeId: null, groupId: null };
+    if (scopeVal.startsWith('g:')) payload.groupId = parseInt(scopeVal.slice(2));
+    else if (scopeVal.startsWith('s:')) payload.storeId = parseInt(scopeVal.slice(2));
     try {
         const res  = await fetch(`${API}?action=api_key`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ keyLabel: label, storeId: storeVal ? parseInt(storeVal) : null }),
+            body: JSON.stringify(payload),
         });
         const data = await res.json();
         if (data.error) { setStatus(data.error, 'err'); return; }

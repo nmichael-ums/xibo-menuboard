@@ -170,12 +170,36 @@ class MenuBoard extends ModuleWidget
                 `keyLabel`   VARCHAR(255) NOT NULL,
                 `keyHash`    VARCHAR(64)  NOT NULL,
                 `storeId`    INT                   DEFAULT NULL,
+                `groupId`    INT                   DEFAULT NULL,
                 `isActive`   TINYINT(1)   NOT NULL DEFAULT 1,
                 `createdAt`  DATETIME              DEFAULT CURRENT_TIMESTAMP,
                 `lastUsedAt` DATETIME              DEFAULT NULL,
                 PRIMARY KEY (`keyId`),
                 UNIQUE KEY `uq_hash` (`keyHash`),
                 KEY `idx_active` (`isActive`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ");
+
+        try {
+            $pdo->exec("ALTER TABLE menuboard_api_keys ADD COLUMN groupId INT DEFAULT NULL AFTER storeId");
+        } catch (\Exception $e) { /* already exists */ }
+
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `menuboard_store_groups` (
+                `groupId`     INT          NOT NULL AUTO_INCREMENT,
+                `groupName`   VARCHAR(255) NOT NULL,
+                `description` TEXT,
+                `createdAt`   DATETIME              DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (`groupId`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ");
+
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `menuboard_store_group_members` (
+                `groupId` INT NOT NULL,
+                `storeId` INT NOT NULL,
+                PRIMARY KEY (`groupId`, `storeId`),
+                KEY `idx_store` (`storeId`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         ");
 
