@@ -206,7 +206,11 @@ function ensureApiKeyTable(PDO $pdo): void {
 // Validates Bearer token, updates lastUsedAt, returns key row. Exits with 401 on failure.
 function requirePosAuth(PDO $pdo): array {
     ensureApiKeyTable($pdo);
-    $header = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    // Apache may strip Authorization before it reaches $_SERVER — check all sources.
+    $header = $_SERVER['HTTP_AUTHORIZATION']
+           ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION']
+           ?? (function_exists('getallheaders') ? (getallheaders()['Authorization'] ?? '') : '')
+           ?? '';
     if (!preg_match('/^Bearer\s+(\S+)$/i', $header, $m)) {
         respond(['error' => 'Missing or invalid Authorization header. Expected: Authorization: Bearer <key>'], 401);
     }
