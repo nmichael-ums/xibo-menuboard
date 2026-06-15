@@ -63,5 +63,55 @@ INSERT
     rm -f /tmp/mb-topbar-insert.txt
 fi
 
+# --- 4. Inject MenuBoard REST API v1 routes into the Xibo .htaccess ---
+# Xibo's VirtualHost (AllowOverride All) processes the .htaccess before any
+# server-level conf.d rules can fire, so this is the only place rewrites work.
+# Rules are inserted just before the Xibo catch-all block so they take priority.
+HTACCESS_FILE="/var/www/cms/web/.htaccess"
+if ! grep -q "menuboard/v1/" "$HTACCESS_FILE"; then
+    echo "[MenuBoard] Patching .htaccess with /menuboard/v1/ routes..."
+    cat > /tmp/mb-htaccess-insert.txt << 'INSERT'
+
+# MenuBoard REST API v1 — route clean paths to the api.php dispatcher.
+# In .htaccess context, patterns match the URI without the leading '/'.
+# Rewrite target uses an absolute path so Apache re-runs Alias translation.
+# Stores
+RewriteCond %{REQUEST_METHOD} =GET
+RewriteRule ^menuboard/v1/stores/?$ /menuboard-editor/api.php?action=stores [QSA,L]
+RewriteCond %{REQUEST_METHOD} =POST
+RewriteRule ^menuboard/v1/stores/?$ /menuboard-editor/api.php?action=store [QSA,L]
+RewriteRule ^menuboard/v1/stores/([0-9]+)/?$ /menuboard-editor/api.php?action=store&storeId=$1 [QSA,L]
+# Items
+RewriteCond %{REQUEST_METHOD} =GET
+RewriteRule ^menuboard/v1/items/?$ /menuboard-editor/api.php?action=items [QSA,L]
+RewriteCond %{REQUEST_METHOD} =POST
+RewriteRule ^menuboard/v1/items/?$ /menuboard-editor/api.php?action=item [QSA,L]
+RewriteRule ^menuboard/v1/items/([0-9]+)/?$ /menuboard-editor/api.php?action=item&id=$1 [QSA,L]
+# Prices
+RewriteRule ^menuboard/v1/prices/?$ /menuboard-editor/api.php?action=prices [QSA,L]
+# API Keys
+RewriteCond %{REQUEST_METHOD} =GET
+RewriteRule ^menuboard/v1/api-keys/?$ /menuboard-editor/api.php?action=api_keys [QSA,L]
+RewriteCond %{REQUEST_METHOD} =POST
+RewriteRule ^menuboard/v1/api-keys/?$ /menuboard-editor/api.php?action=api_key [QSA,L]
+RewriteRule ^menuboard/v1/api-keys/([0-9]+)/?$ /menuboard-editor/api.php?action=api_key&keyId=$1 [QSA,L]
+# POS endpoints — bulk before general to avoid prefix match clash
+RewriteRule ^menuboard/v1/pos/catalog/?$ /menuboard-editor/api.php?action=pos_items [QSA,L]
+RewriteRule ^menuboard/v1/pos/prices/bulk/?$ /menuboard-editor/api.php?action=pos_prices_bulk [QSA,L]
+RewriteRule ^menuboard/v1/pos/prices/?$ /menuboard-editor/api.php?action=pos_prices [QSA,L]
+RewriteRule ^menuboard/v1/pos/availability/?$ /menuboard-editor/api.php?action=pos_availability [QSA,L]
+
+INSERT
+
+    awk '
+        FNR==NR { insert=insert $0 "\n"; next }
+        /^# all others/ && !done { printf "%s", insert; done=1 }
+        { print }
+    ' /tmp/mb-htaccess-insert.txt "$HTACCESS_FILE" > "${HTACCESS_FILE}.tmp" \
+        && mv "${HTACCESS_FILE}.tmp" "$HTACCESS_FILE"
+
+    rm -f /tmp/mb-htaccess-insert.txt
+fi
+
 echo "[MenuBoard] Setup complete — handing off to CMS entrypoint."
 exec /entrypoint.sh

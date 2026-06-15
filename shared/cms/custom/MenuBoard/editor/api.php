@@ -144,8 +144,7 @@ function widgetsByTheme(PDO $pdo, int $themeId): array {
          JOIN playlist p ON p.playlistId = w.playlistId
          JOIN region r   ON r.regionId   = p.regionId
          JOIN layout l   ON l.layoutId   = r.layoutId
-         WHERE w.type = 'menuboard'
-           AND (l.parentId IS NULL OR l.parentId = '' OR l.parentId = 0)"
+         WHERE w.type = 'menuboard'"
     );
     $stmt->execute([':tid' => $themeId]);
     return array_column($stmt->fetchAll(), 'widgetId');
@@ -153,33 +152,22 @@ function widgetsByTheme(PDO $pdo, int $themeId): array {
 
 // Only notifies widgets whose theme's layoutJson actually references one of the
 // changed itemIds — avoids invalidating boards that don't display those items.
-function widgetsByStoreAndItems(PDO $pdo, int $storeId, array $itemIds): array {
-    if (empty($itemIds)) return [];
+function widgetsByStore(PDO $pdo, int $storeId): array {
     $stmt = $pdo->prepare(
-        "SELECT w.widgetId, mt.layoutJson
-           FROM widget w
-           JOIN widgetoption wo_store ON wo_store.widgetId = w.widgetId
-             AND wo_store.`option` = 'storeId' AND CAST(wo_store.value AS UNSIGNED) = :sid
-           JOIN widgetoption wo_theme ON wo_theme.widgetId = w.widgetId
-             AND wo_theme.`option` = 'themeId'
-           LEFT JOIN menuboard_themes mt
-             ON mt.themeId = CAST(wo_theme.value AS UNSIGNED)
+        "SELECT w.widgetId FROM widget w
+           JOIN widgetoption wo ON wo.widgetId = w.widgetId
+             AND wo.`option` = 'storeId' AND CAST(wo.value AS UNSIGNED) = :sid
            JOIN playlist p ON p.playlistId = w.playlistId
            JOIN region r   ON r.regionId   = p.regionId
            JOIN layout l   ON l.layoutId   = r.layoutId
-          WHERE w.type = 'menuboard'
-            AND (l.parentId IS NULL OR l.parentId = '' OR l.parentId = 0)"
+          WHERE w.type = 'menuboard'"
     );
     $stmt->execute([':sid' => $storeId]);
-    $affected = [];
-    foreach ($stmt->fetchAll() as $row) {
-        $slots       = json_decode($row['layoutJson'] ?? '[]', true) ?: [];
-        $slotItemIds = array_map('intval', array_column($slots, 'itemId'));
-        if (array_intersect($itemIds, $slotItemIds)) {
-            $affected[] = $row['widgetId'];
-        }
-    }
-    return $affected;
+    return array_column($stmt->fetchAll(), 'widgetId');
+}
+
+function widgetsByStoreAndItems(PDO $pdo, int $storeId, array $itemIds): array {
+    return widgetsByStore($pdo, $storeId);
 }
 
 // =============================================================================
@@ -226,15 +214,29 @@ function requirePosAuth(PDO $pdo): array {
     return $key;
 }
 
-// Resolve storeId or groupId from a request body to an array of storeIds, enforcing key scope.
+// Resolve storeId, storeNumber, or groupId from a request body to an array of storeIds, enforcing key scope.
 function resolveStoreIds(PDO $pdo, array $body, array $key): array {
-    $storeId = isset($body['storeId']) && $body['storeId'] !== null && $body['storeId'] !== ''
-               ? (int)$body['storeId'] : null;
-    $groupId = isset($body['groupId']) && $body['groupId'] !== null && $body['groupId'] !== ''
-               ? (int)$body['groupId'] : null;
+    $storeId     = isset($body['storeId']) && $body['storeId'] !== null && $body['storeId'] !== ''
+                   ? (int)$body['storeId'] : null;
+    $storeNumber = isset($body['storeNumber']) && $body['storeNumber'] !== null && trim((string)$body['storeNumber']) !== ''
+                   ? trim((string)$body['storeNumber']) : null;
+    $groupId     = isset($body['groupId']) && $body['groupId'] !== null && $body['groupId'] !== ''
+                   ? (int)$body['groupId'] : null;
 
+    // Resolve storeNumber → storeId
+    if ($storeNumber !== null && $storeId === null) {
+        $row = $pdo->prepare("SELECT storeId FROM menuboard_stores WHERE storeNumber = ? AND isActive = 1 LIMIT 1");
+        $row->execute([$storeNumber]);
+        $found = $row->fetch();
+        if (!$found) respond(['error' => "No active store found with storeNumber \"{$storeNumber}\""], 404);
+        $storeId = (int)$found['storeId'];
+    }
+
+    // If no store/group in body, fall back to the scope embedded in the API key
     if ($storeId === null && $groupId === null) {
-        respond(['error' => 'storeId or groupId is required'], 400);
+        if ($key['storeId'] !== null)  $storeId = (int)$key['storeId'];
+        elseif ($key['groupId'] !== null) $groupId = (int)$key['groupId'];
+        else respond(['error' => 'storeId, storeNumber, or groupId is required'], 400);
     }
 
     if ($storeId !== null) {
@@ -267,47 +269,112 @@ function resolveStoreIds(PDO $pdo, array $body, array $key): array {
     return $ids;
 }
 
-// Batch-resolve an array of item objects (each has posCode or itemId) to itemIds.
+// Batch-resolve an array of POS item objects to internal itemIds.
+// Resolution order:
+//   1. posCode field  → match menuboard_items.posCode
+//   2. id field       → match menuboard_items.posCode (POS id stored as posCode)
+//   3. id + label     → fallback: match menuboard_items.name = label; write posCode = id so
+//                       subsequent pushes resolve via route 2 without needing a name match
+//   4. itemId field   → direct internal lookup
 // Returns ['resolved' => [inputIndex => itemId], 'notFound' => [...]]
 function resolvePosItems(PDO $pdo, array $items): array {
-    $posCodes = [];
-    $itemIds  = [];
-    foreach ($items as $i) {
-        if (!empty($i['posCode']))  $posCodes[] = trim((string)$i['posCode']);
-        elseif (!empty($i['itemId'])) $itemIds[] = (int)$i['itemId'];
+    $posCodes  = [];
+    $itemIds   = [];
+    $nameItems = []; // idx -> ['id' => code, 'label' => name] for fallback
+
+    foreach ($items as $idx => $i) {
+        $code = $i['posCode'] ?? (isset($i['id']) ? trim((string)$i['id']) : null);
+        if ($code !== null && $code !== '') {
+            $posCodes[$idx] = $code;
+        } elseif (!empty($i['itemId'])) {
+            $itemIds[$idx] = (int)$i['itemId'];
+        }
     }
 
-    $codeMap = [];
+    // Route 1 & 2: posCode / id lookup
+    $codeMap    = []; // posCode -> itemId
+    $existingPC = []; // itemId -> stored posCode (empty string = not set)
     if (!empty($posCodes)) {
-        $ph   = implode(',', array_fill(0, count($posCodes), '?'));
-        $stmt = $pdo->prepare("SELECT itemId, posCode FROM menuboard_items WHERE posCode IN ($ph) AND isActive = 1");
-        $stmt->execute($posCodes);
-        foreach ($stmt->fetchAll() as $r) $codeMap[$r['posCode']] = (int)$r['itemId'];
+        $unique = array_values(array_unique($posCodes));
+        $ph     = implode(',', array_fill(0, count($unique), '?'));
+        $stmt   = $pdo->prepare("SELECT itemId, posCode FROM menuboard_items WHERE posCode IN ($ph) AND isActive = 1");
+        $stmt->execute($unique);
+        foreach ($stmt->fetchAll() as $r) {
+            $codeMap[(string)$r['posCode']] = (int)$r['itemId'];
+            $existingPC[(int)$r['itemId']]  = (string)$r['posCode'];
+        }
     }
 
+    // Route 4: direct itemId lookup
     $idSet = [];
     if (!empty($itemIds)) {
-        $ph   = implode(',', array_fill(0, count($itemIds), '?'));
-        $stmt = $pdo->prepare("SELECT itemId FROM menuboard_items WHERE itemId IN ($ph) AND isActive = 1");
-        $stmt->execute($itemIds);
+        $unique = array_values(array_unique($itemIds));
+        $ph     = implode(',', array_fill(0, count($unique), '?'));
+        $stmt   = $pdo->prepare("SELECT itemId FROM menuboard_items WHERE itemId IN ($ph) AND isActive = 1");
+        $stmt->execute($unique);
         foreach ($stmt->fetchAll() as $r) $idSet[(int)$r['itemId']] = true;
     }
 
-    $resolved = [];
-    $notFound = [];
+    $resolved  = [];
+    $notFound  = [];
+    $writeBack = []; // itemId -> posCode to persist after resolution
+
     foreach ($items as $idx => $i) {
-        if (!empty($i['posCode'])) {
-            $code = trim((string)$i['posCode']);
-            if (isset($codeMap[$code])) $resolved[$idx] = $codeMap[$code];
-            else $notFound[] = ['posCode' => $code];
-        } elseif (!empty($i['itemId'])) {
-            $id = (int)$i['itemId'];
+        if (isset($posCodes[$idx])) {
+            $code = $posCodes[$idx];
+            if (isset($codeMap[$code])) {
+                $itemId = $codeMap[$code];
+                $resolved[$idx] = $itemId;
+                // Write posCode back if id was used and the field was previously empty
+                if (!isset($i['posCode']) && isset($i['id']) && empty($existingPC[$itemId])) {
+                    $writeBack[$itemId] = $code;
+                }
+            } else {
+                // Route 3: posCode not found — try matching by name (label) if provided
+                $label = isset($i['label']) ? trim((string)$i['label']) : null;
+                if (!isset($i['posCode']) && isset($i['id']) && $label !== null && $label !== '') {
+                    $nameItems[$idx] = ['code' => $code, 'label' => $label];
+                } else {
+                    $notFound[] = ['posCode' => $code];
+                }
+            }
+        } elseif (isset($itemIds[$idx])) {
+            $id = $itemIds[$idx];
             if (isset($idSet[$id])) $resolved[$idx] = $id;
             else $notFound[] = ['itemId' => $id];
         } else {
-            $notFound[] = ['index' => $idx, 'error' => 'missing posCode and itemId'];
+            $notFound[] = ['index' => $idx, 'error' => 'missing posCode, id, and itemId'];
         }
     }
+
+    // Route 3: name-based fallback for unmatched id+label pairs
+    if (!empty($nameItems)) {
+        $names = array_values(array_unique(array_column($nameItems, 'label')));
+        $ph    = implode(',', array_fill(0, count($names), '?'));
+        $stmt  = $pdo->prepare("SELECT itemId, name, posCode FROM menuboard_items WHERE name IN ($ph) AND isActive = 1");
+        $stmt->execute($names);
+        $nameMap = []; // name -> itemId (first match)
+        foreach ($stmt->fetchAll() as $r) {
+            $nameMap[strtolower($r['name'])] = (int)$r['itemId'];
+        }
+        foreach ($nameItems as $idx => $n) {
+            $key = strtolower($n['label']);
+            if (isset($nameMap[$key])) {
+                $itemId = $nameMap[$key];
+                $resolved[$idx] = $itemId;
+                $writeBack[$itemId] = $n['code']; // persist posCode for future pushes
+            } else {
+                $notFound[] = ['id' => $n['code'], 'label' => $n['label']];
+            }
+        }
+    }
+
+    // Persist any new posCode linkages discovered during this push
+    if (!empty($writeBack)) {
+        $upd = $pdo->prepare("UPDATE menuboard_items SET posCode = ? WHERE itemId = ? AND (posCode IS NULL OR posCode = '')");
+        foreach ($writeBack as $itemId => $code) $upd->execute([$code, $itemId]);
+    }
+
     return ['resolved' => $resolved, 'notFound' => $notFound];
 }
 
@@ -370,7 +437,8 @@ if ($method === 'PUT' && $action === 'theme') {
             SET themeName       = CASE WHEN :name != '' THEN :name2 ELSE themeName END,
                 backgroundUrl   = :bg,
                 backgroundMediaId = :mediaId,
-                layoutJson      = :layout
+                layoutJson      = :layout,
+                updatedAt       = NOW()
           WHERE themeId = :id"
     );
     $stmt->execute([
@@ -588,6 +656,27 @@ if ($method === 'PUT' && $action === 'prices') {
     $storeId = (int)($_GET['storeId'] ?? 0);
     $body    = bodyJson();
     if (!is_array($body)) respond(['error' => 'Expected array of price objects'], 400);
+
+    // Split items into those with a direct itemId and those needing posCode/name resolution
+    $directItems   = []; // index => row  (have itemId)
+    $resolveItems  = []; // index => row  (have id or label, need resolution)
+    foreach ($body as $idx => $p) {
+        if (!empty($p['itemId'])) $directItems[$idx]  = $p;
+        else                      $resolveItems[$idx] = $p;
+    }
+
+    // Resolve POS-format items (id / label fields) to internal itemIds
+    $resolved = [];
+    if (!empty($resolveItems)) {
+        $res = resolvePosItems($pdo, array_values($resolveItems));
+        // Re-map resolved indices back to original body indices
+        $resolveKeys = array_keys($resolveItems);
+        foreach ($res['resolved'] as $relIdx => $itemId) {
+            $origIdx = $resolveKeys[$relIdx];
+            $resolved[$origIdx] = $itemId;
+        }
+    }
+
     $stmt = $pdo->prepare(
         "INSERT INTO menuboard_prices (itemId, storeId, price, priceLabel, isAvailable)
          VALUES (:itemId, :storeId, :price, :label, :avail)
@@ -596,22 +685,30 @@ if ($method === 'PUT' && $action === 'prices') {
              priceLabel  = VALUES(priceLabel),
              isAvailable = VALUES(isAvailable)"
     );
-    $updated = 0;
-    foreach ($body as $p) {
-        $itemId = (int)($p['itemId'] ?? 0);
-        if (!$itemId) continue;
+
+    $updated        = 0;
+    $changedItemIds = [];
+
+    foreach ($body as $idx => $p) {
+        if (!empty($p['itemId'])) {
+            $itemId = (int)$p['itemId'];
+        } elseif (isset($resolved[$idx])) {
+            $itemId = $resolved[$idx];
+        } else {
+            continue;
+        }
         $stmt->execute([
             ':itemId'  => $itemId,
             ':storeId' => $storeId,
-            ':price'   => isset($p['price'])      ? (float)$p['price']        : null,
+            ':price'   => isset($p['price'])      ? (float)$p['price']       : null,
             ':label'   => isset($p['priceLabel'])  ? (string)$p['priceLabel'] : null,
             ':avail'   => isset($p['isAvailable']) ? (int)(bool)$p['isAvailable'] : 1,
         ]);
+        $changedItemIds[] = $itemId;
         $updated++;
     }
 
-    $changedItemIds   = array_map('intval', array_column($body, 'itemId'));
-    $widgetIds        = widgetsByStoreAndItems($pdo, $storeId, $changedItemIds);
+    $widgetIds        = widgetsByStore($pdo, $storeId);
     $publishedLayouts = publishWidgets($pdo, $widgetIds, getLibraryPath($pdo));
     respond([
         'updated'         => $updated,
@@ -642,10 +739,14 @@ function ensureStoreTables(PDO $pdo): void {
         'storeAddress' => "ALTER TABLE menuboard_stores ADD COLUMN storeAddress TEXT",
         'phoneNumber'  => "ALTER TABLE menuboard_stores ADD COLUMN phoneNumber  VARCHAR(50)  NOT NULL DEFAULT ''",
         'notes'        => "ALTER TABLE menuboard_stores ADD COLUMN notes        TEXT",
+        'storeNumber'  => "ALTER TABLE menuboard_stores ADD COLUMN storeNumber  VARCHAR(50)  DEFAULT NULL",
     ];
     foreach ($extCols as $sql) {
         try { $pdo->exec($sql); } catch (\Exception $e) { /* column already exists */ }
     }
+    try {
+        $pdo->exec("ALTER TABLE menuboard_stores ADD UNIQUE KEY uq_storeNumber (storeNumber)");
+    } catch (\Exception $e) { /* already exists */ }
 
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS `menuboard_store_concepts` (
@@ -663,7 +764,7 @@ if ($method === 'GET' && $action === 'stores') {
     $all  = !empty($_GET['all']);
     $where = $all ? '' : 'WHERE isActive = 1';
     $rows = $pdo->query(
-        "SELECT storeId, storeName, contactName, storeAddress, phoneNumber, notes, isActive
+        "SELECT storeId, storeNumber, storeName, contactName, storeAddress, phoneNumber, notes, isActive
            FROM menuboard_stores
           $where
           ORDER BY storeName"
@@ -676,7 +777,7 @@ if ($method === 'GET' && $action === 'store') {
     if (!$storeId) respond(['error' => 'storeId required'], 400);
     ensureStoreTables($pdo);
     $stmt = $pdo->prepare(
-        "SELECT storeId, storeName, contactName, storeAddress, phoneNumber, notes, isActive
+        "SELECT storeId, storeNumber, storeName, contactName, storeAddress, phoneNumber, notes, isActive
            FROM menuboard_stores
           WHERE storeId = :sid"
     );
@@ -705,6 +806,11 @@ if ($method === 'PUT' && $action === 'store') {
             $sets[]        = "$col = :$col";
             $params[":$col"] = trim((string)$body[$col]);
         }
+    }
+    if (array_key_exists('storeNumber', $body)) {
+        $num = trim((string)$body['storeNumber']);
+        $sets[]              = 'storeNumber = :storeNumber';
+        $params[':storeNumber'] = $num !== '' ? $num : null;
     }
     if (array_key_exists('isActive', $body)) {
         $sets[]          = 'isActive = :isActive';
@@ -743,10 +849,12 @@ if ($method === 'POST' && $action === 'store') {
     $storeName = trim($body['storeName'] ?? '');
     if ($storeName === '') respond(['error' => 'storeName is required'], 400);
 
+    $storeNum = trim($body['storeNumber'] ?? '');
+    $storeNum = $storeNum !== '' ? $storeNum : null;
     $stmt = $pdo->prepare(
-        "INSERT INTO menuboard_stores (storeName) VALUES (:name)"
+        "INSERT INTO menuboard_stores (storeName, storeNumber) VALUES (:name, :num)"
     );
-    $stmt->execute([':name' => $storeName]);
+    $stmt->execute([':name' => $storeName, ':num' => $storeNum]);
     $newStoreId = (int)$pdo->lastInsertId();
 
     // Save enabled concepts
@@ -766,7 +874,7 @@ if ($method === 'POST' && $action === 'store') {
         }
     }
 
-    // Copy prices from an existing store
+    // Copy prices from an existing store, or default all active items to $0.00
     $copyFrom = (int)($body['copyPricesFrom'] ?? 0);
     if ($copyFrom > 0) {
         // Build concept filter for the new store
@@ -799,9 +907,32 @@ if ($method === 'POST' && $action === 'store') {
                   WHERE storeId = ?"
             )->execute([$newStoreId, $copyFrom]);
         }
+    } else {
+        // No copy source — seed every active item with a $0.00 price so price fields
+        // render on the board and are visible to the store manager to fill in.
+        $pdo->prepare(
+            "INSERT IGNORE INTO menuboard_prices (itemId, storeId, price, priceLabel, isAvailable)
+             SELECT itemId, ?, 0.00, NULL, 1
+               FROM menuboard_items
+              WHERE isActive = 1"
+        )->execute([$newStoreId]);
     }
 
     respond(['storeId' => $newStoreId, 'storeName' => $storeName]);
+}
+
+if ($method === 'DELETE' && $action === 'store') {
+    $storeId = (int)($_GET['storeId'] ?? 0);
+    if (!$storeId) respond(['error' => 'storeId required'], 400);
+
+    $pdo->prepare("DELETE FROM menuboard_prices            WHERE storeId = ?")->execute([$storeId]);
+    $pdo->prepare("DELETE FROM menuboard_price_schedules   WHERE storeId = ?")->execute([$storeId]);
+    $pdo->prepare("DELETE FROM menuboard_schedules         WHERE storeId = ?")->execute([$storeId]);
+    $pdo->prepare("DELETE FROM menuboard_store_concepts    WHERE storeId = ?")->execute([$storeId]);
+    $pdo->prepare("DELETE FROM menuboard_store_group_members WHERE storeId = ?")->execute([$storeId]);
+    $pdo->prepare("DELETE FROM menuboard_api_keys          WHERE storeId = ?")->execute([$storeId]);
+    $pdo->prepare("DELETE FROM menuboard_stores            WHERE storeId = ?")->execute([$storeId]);
+    respond(['success' => true]);
 }
 
 if ($method === 'GET' && $action === 'store_concepts') {
@@ -1368,9 +1499,18 @@ if ($method === 'DELETE' && $action === 'price_schedule') {
 // Catalog endpoint: lets POS discover itemId/posCode mappings.
 // Accepts storeId (returns store prices) or groupId (returns catalog only, no per-store prices).
 if ($method === 'GET' && $action === 'pos_items') {
-    $key     = requirePosAuth($pdo);
-    $storeId = isset($_GET['storeId']) && $_GET['storeId'] !== '' ? (int)$_GET['storeId'] : null;
-    $groupId = isset($_GET['groupId']) && $_GET['groupId'] !== '' ? (int)$_GET['groupId'] : null;
+    $key         = requirePosAuth($pdo);
+    $storeId     = isset($_GET['storeId'])     && $_GET['storeId']     !== '' ? (int)$_GET['storeId']          : null;
+    $storeNumber = isset($_GET['storeNumber']) && $_GET['storeNumber'] !== '' ? trim($_GET['storeNumber'])      : null;
+    $groupId     = isset($_GET['groupId'])     && $_GET['groupId']     !== '' ? (int)$_GET['groupId']          : null;
+
+    if ($storeNumber !== null && $storeId === null) {
+        $row = $pdo->prepare("SELECT storeId FROM menuboard_stores WHERE storeNumber = ? AND isActive = 1 LIMIT 1");
+        $row->execute([$storeNumber]);
+        $found = $row->fetch();
+        if (!$found) respond(['error' => "No active store found with storeNumber \"{$storeNumber}\""], 404);
+        $storeId = (int)$found['storeId'];
+    }
 
     if ($storeId) {
         if ($key['storeId'] !== null && (int)$key['storeId'] !== $storeId) {
@@ -1409,9 +1549,10 @@ if ($method === 'GET' && $action === 'pos_items') {
 
 // Update prices for one or more items (storeId or groupId)
 if ($method === 'PUT' && $action === 'pos_prices') {
-    $key   = requirePosAuth($pdo);
-    $body  = bodyJson();
-    $items = $body['items'] ?? [];
+    $key  = requirePosAuth($pdo);
+    $body = bodyJson();
+    // Accept flat array body OR {"items":[...]} wrapper
+    $items = is_array($body) && isset($body[0]) ? $body : ($body['items'] ?? []);
     if (!is_array($items) || !$items) respond(['error' => 'items array is required'], 400);
 
     $storeIds = resolveStoreIds($pdo, $body, $key);

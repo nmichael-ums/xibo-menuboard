@@ -1,0 +1,587 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "MenuBoard API",
+    "version": "1.0.0",
+    "description": "REST API for the Xibo MenuBoard module.\n\n**Authentication**\n\nPOS endpoints (`/pos/...`) require an API key passed as a Bearer token:\n```\nAuthorization: Bearer mbk_...\n```\nGenerate keys via `POST /menuboard/v1/api-keys` (no auth required).\n\nAll other endpoints have no authentication requirement."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:65501",
+      "description": "Local dev server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Stores",
+      "description": "Store management"
+    },
+    {
+      "name": "Items",
+      "description": "Menu item catalog"
+    },
+    {
+      "name": "Prices",
+      "description": "Store price management (internal/editor use)"
+    },
+    {
+      "name": "API Keys",
+      "description": "POS API key management"
+    },
+    {
+      "name": "POS",
+      "description": "POS integration — requires `Authorization: Bearer <key>`"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "mbk_..."
+      }
+    },
+    "schemas": {
+      "Store": {
+        "type": "object",
+        "properties": {
+          "storeId":      { "type": "integer" },
+          "storeNumber":  { "type": "string", "nullable": true, "description": "Client-assigned identifier used by POS systems to target this store. Unique, changeable, not the DB primary key." },
+          "storeName":    { "type": "string" },
+          "contactName":  { "type": "string" },
+          "storeAddress": { "type": "string" },
+          "phoneNumber":  { "type": "string" },
+          "notes":        { "type": "string" },
+          "isActive":     { "type": "integer", "enum": [0, 1] }
+        }
+      },
+      "MenuItem": {
+        "type": "object",
+        "properties": {
+          "itemId":      { "type": "integer" },
+          "posCode":     { "type": "string", "description": "POS-system identifier (may be empty)" },
+          "name":        { "type": "string" },
+          "concept":     { "type": "string" },
+          "category":    { "type": "string" },
+          "description": { "type": "string" },
+          "isActive":    { "type": "integer", "enum": [0, 1] }
+        }
+      },
+      "PriceRow": {
+        "type": "object",
+        "properties": {
+          "itemId":      { "type": "integer" },
+          "name":        { "type": "string" },
+          "concept":     { "type": "string" },
+          "category":    { "type": "string" },
+          "price":       { "type": "number", "nullable": true },
+          "priceLabel":  { "type": "string", "nullable": true, "example": "$9.99" },
+          "isAvailable": { "type": "integer", "enum": [0, 1] }
+        }
+      },
+      "PosItemInput": {
+        "type": "object",
+        "description": "Identify by `itemId` OR `posCode` — not both.",
+        "properties": {
+          "itemId":      { "type": "integer" },
+          "posCode":     { "type": "string" },
+          "price":       { "type": "number", "nullable": true, "example": 9.99 },
+          "priceLabel":  { "type": "string", "nullable": true, "example": "$9.99" },
+          "isAvailable": { "type": "integer", "enum": [0, 1], "default": 1 }
+        }
+      },
+      "ApiKey": {
+        "type": "object",
+        "properties": {
+          "keyId":      { "type": "integer" },
+          "keyLabel":   { "type": "string" },
+          "storeId":    { "type": "integer", "nullable": true, "description": "Null = unrestricted (all stores)" },
+          "groupId":    { "type": "integer", "nullable": true },
+          "isActive":   { "type": "integer", "enum": [0, 1] },
+          "createdAt":  { "type": "string", "format": "date-time" },
+          "lastUsedAt": { "type": "string", "format": "date-time", "nullable": true }
+        }
+      },
+      "PosUpdateResponse": {
+        "type": "object",
+        "properties": {
+          "updated":          { "type": "integer", "description": "Number of items updated" },
+          "stores":           { "type": "integer", "description": "Number of stores affected" },
+          "notFound":         { "type": "array", "items": { "type": "object" }, "description": "Items from the request that could not be resolved" },
+          "publishedLayouts": { "type": "integer", "description": "Xibo layout publish count" }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/menuboard/v1/stores": {
+      "get": {
+        "tags": ["Stores"],
+        "summary": "List stores",
+        "operationId": "listStores",
+        "parameters": [
+          { "name": "all", "in": "query", "schema": { "type": "integer", "enum": [0, 1] }, "description": "Include inactive stores" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of stores",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Store" } } } }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Stores"],
+        "summary": "Create store",
+        "operationId": "createStore",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["storeName"],
+                "properties": {
+                  "storeName":      { "type": "string", "example": "Downtown Location" },
+                  "copyPricesFrom": { "type": "integer", "description": "Copy initial prices from this storeId" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created store",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "storeId": { "type": "integer" }, "storeName": { "type": "string" } } } } }
+          }
+        }
+      }
+    },
+    "/menuboard/v1/stores/{storeId}": {
+      "parameters": [
+        { "name": "storeId", "in": "path", "required": true, "schema": { "type": "integer" } }
+      ],
+      "get": {
+        "tags": ["Stores"],
+        "summary": "Get store",
+        "operationId": "getStore",
+        "responses": {
+          "200": { "description": "Store object", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Store" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      },
+      "put": {
+        "tags": ["Stores"],
+        "summary": "Update store",
+        "operationId": "updateStore",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "storeName":    { "type": "string" },
+                  "contactName":  { "type": "string" },
+                  "storeAddress": { "type": "string" },
+                  "phoneNumber":  { "type": "string" },
+                  "notes":        { "type": "string" },
+                  "isActive":     { "type": "integer", "enum": [0, 1] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "object", "properties": { "success": { "type": "boolean" } } } } } }
+        }
+      }
+    },
+    "/menuboard/v1/items": {
+      "get": {
+        "tags": ["Items"],
+        "summary": "List menu items",
+        "operationId": "listItems",
+        "description": "Returns active items. Pass `all=1` to include inactive.",
+        "parameters": [
+          { "name": "all", "in": "query", "schema": { "type": "integer", "enum": [0, 1] } }
+        ],
+        "responses": {
+          "200": { "description": "Items array", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/MenuItem" } } } } }
+        }
+      },
+      "post": {
+        "tags": ["Items"],
+        "summary": "Create menu item",
+        "operationId": "createItem",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name":        { "type": "string" },
+                  "posCode":     { "type": "string" },
+                  "concept":     { "type": "string" },
+                  "category":    { "type": "string" },
+                  "description": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "type": "object", "properties": { "itemId": { "type": "integer" } } } } } }
+        }
+      }
+    },
+    "/menuboard/v1/items/{itemId}": {
+      "parameters": [
+        { "name": "itemId", "in": "path", "required": true, "schema": { "type": "integer" } }
+      ],
+      "put": {
+        "tags": ["Items"],
+        "summary": "Update menu item",
+        "operationId": "updateItem",
+        "description": "Only fields present in the body are updated.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name":        { "type": "string" },
+                  "posCode":     { "type": "string" },
+                  "concept":     { "type": "string" },
+                  "category":    { "type": "string" },
+                  "description": { "type": "string" },
+                  "isActive":    { "type": "integer", "enum": [0, 1] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "OK" }
+        }
+      },
+      "delete": {
+        "tags": ["Items"],
+        "summary": "Delete menu item",
+        "operationId": "deleteItem",
+        "description": "Also removes all price rows for this item.",
+        "responses": {
+          "200": { "description": "OK" }
+        }
+      }
+    },
+    "/menuboard/v1/prices": {
+      "get": {
+        "tags": ["Prices"],
+        "summary": "Get prices for a store",
+        "operationId": "getStorePrices",
+        "description": "Returns all active items left-joined with the store's price rows. Also applies any pending price schedules.",
+        "parameters": [
+          { "name": "storeId", "in": "query", "required": true, "schema": { "type": "integer" }, "example": 1 }
+        ],
+        "responses": {
+          "200": { "description": "Price rows", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/PriceRow" } } } } }
+        }
+      },
+      "put": {
+        "tags": ["Prices"],
+        "summary": "Bulk update prices (editor)",
+        "operationId": "updateStorePrices",
+        "description": "Upserts multiple price rows for a store. Used by the editor UI; for POS use `/pos/prices` instead.",
+        "parameters": [
+          { "name": "storeId", "in": "query", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "itemId":      { "type": "integer" },
+                    "price":       { "type": "number", "nullable": true },
+                    "priceLabel":  { "type": "string", "nullable": true },
+                    "isAvailable": { "type": "integer", "enum": [0, 1] }
+                  }
+                },
+                "example": [
+                  { "itemId": 11, "price": 9.99,  "priceLabel": "$9.99",  "isAvailable": 1 },
+                  { "itemId": 12, "price": 12.99, "priceLabel": "$12.99", "isAvailable": 1 }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Updated count", "content": { "application/json": { "schema": { "type": "object", "properties": { "updated": { "type": "integer" }, "publishedLayouts": { "type": "integer" } } } } } }
+        }
+      }
+    },
+    "/menuboard/v1/api-keys": {
+      "get": {
+        "tags": ["API Keys"],
+        "summary": "List API keys",
+        "operationId": "listApiKeys",
+        "description": "Returns all keys (active and revoked). The raw key value is never returned after creation.",
+        "responses": {
+          "200": { "description": "Keys array", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ApiKey" } } } } }
+        }
+      },
+      "post": {
+        "tags": ["API Keys"],
+        "summary": "Create API key",
+        "operationId": "createApiKey",
+        "description": "The raw key is returned once in the response — store it immediately, it cannot be retrieved again.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["keyLabel"],
+                "properties": {
+                  "keyLabel": { "type": "string", "example": "POS Terminal 1" },
+                  "storeId":  { "type": "integer", "nullable": true, "description": "Scope to a single store. Omit for unrestricted." },
+                  "groupId":  { "type": "integer", "nullable": true, "description": "Scope to a store group. Omit for unrestricted." }
+                }
+              },
+              "examples": {
+                "store-scoped": {
+                  "summary": "Scoped to store 1",
+                  "value": { "keyLabel": "POS Terminal 1", "storeId": 1 }
+                },
+                "unrestricted": {
+                  "summary": "All stores",
+                  "value": { "keyLabel": "Central POS System" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created — contains the raw `key` value",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "keyId":    { "type": "integer" },
+                    "keyLabel": { "type": "string" },
+                    "key":      { "type": "string", "description": "Raw API key — save this now, it is not stored in plain text" },
+                    "storeId":  { "type": "integer", "nullable": true },
+                    "groupId":  { "type": "integer", "nullable": true }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/menuboard/v1/api-keys/{keyId}": {
+      "parameters": [
+        { "name": "keyId", "in": "path", "required": true, "schema": { "type": "integer" } }
+      ],
+      "delete": {
+        "tags": ["API Keys"],
+        "summary": "Revoke API key",
+        "operationId": "revokeApiKey",
+        "description": "Sets `isActive = 0`. The key stops working immediately.",
+        "responses": {
+          "200": { "description": "OK" }
+        }
+      }
+    },
+    "/menuboard/v1/pos/catalog": {
+      "get": {
+        "tags": ["POS"],
+        "summary": "Get catalog + current prices",
+        "operationId": "posCatalog",
+        "description": "Returns all active items with current price and availability for the requested store. Use this to discover `itemId` / `posCode` mappings before sending price updates.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "storeId",     "in": "query", "schema": { "type": "integer" }, "example": 1, "description": "Target by DB primary key." },
+          { "name": "storeNumber", "in": "query", "schema": { "type": "string"  }, "description": "Target by client-assigned store number (alternative to storeId)." },
+          { "name": "groupId",     "in": "query", "schema": { "type": "integer" }, "description": "Returns catalog only (no per-store prices). Requires group-scoped or unrestricted key." }
+        ],
+        "responses": {
+          "200": { "description": "Catalog rows", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/PriceRow" } } } } },
+          "401": { "description": "Missing / invalid Bearer token", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "403": { "description": "Key not authorized for requested store/group", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/menuboard/v1/pos/prices": {
+      "put": {
+        "tags": ["POS"],
+        "summary": "Update prices (incremental)",
+        "operationId": "posUpdatePrices",
+        "description": "Updates prices for the listed items only. Items not in the payload are untouched.\n\nIdentify items by `itemId` (database ID) **or** `posCode` (string). Mix freely. Unrecognised codes are returned in `notFound`.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["items"],
+                "properties": {
+                  "storeId":     { "type": "integer", "description": "Target by DB primary key." },
+                  "storeNumber": { "type": "string",  "description": "Target by client-assigned store number (alternative to storeId)." },
+                  "groupId":     { "type": "integer", "description": "Apply to all stores in a group. Requires group-scoped or unrestricted key." },
+                  "items":   { "type": "array", "items": { "$ref": "#/components/schemas/PosItemInput" } }
+                }
+              },
+              "examples": {
+                "by-itemId": {
+                  "summary": "By itemId",
+                  "value": {
+                    "storeId": 1,
+                    "items": [
+                      { "itemId": 11, "price": 9.99,  "priceLabel": "$9.99",  "isAvailable": 1 },
+                      { "itemId": 12, "price": 12.99, "priceLabel": "$12.99", "isAvailable": 1 }
+                    ]
+                  }
+                },
+                "by-posCode": {
+                  "summary": "By posCode",
+                  "value": {
+                    "storeId": 1,
+                    "items": [
+                      { "posCode": "BBQ-BAKER-MEAT",   "price": 14.99, "priceLabel": "$14.99", "isAvailable": 1 },
+                      { "posCode": "BBQ-BAKER-CRSPCX", "price": 13.99, "priceLabel": "$13.99", "isAvailable": 1 },
+                      { "posCode": "BBQ-BAKER-BUFF",   "price": 13.99, "priceLabel": "$13.99", "isAvailable": 0 }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Update result", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PosUpdateResponse" } } } },
+          "401": { "description": "Unauthorized" },
+          "403": { "description": "Forbidden" }
+        }
+      }
+    },
+    "/menuboard/v1/pos/prices/bulk": {
+      "put": {
+        "tags": ["POS"],
+        "summary": "Full price sheet replacement",
+        "operationId": "posReplacePrices",
+        "description": "Replaces the store's entire price sheet in one call.\n\n**Key behaviour:** Any item already tracked for the store but **absent from the payload** is automatically set to `isAvailable = 0`.\n\nUse for EOD syncs or when the POS sends a complete snapshot. Use `/pos/prices` for incremental updates.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["items"],
+                "properties": {
+                  "storeId":     { "type": "integer" },
+                  "storeNumber": { "type": "string",  "description": "Client-assigned store number (alternative to storeId)." },
+                  "groupId":     { "type": "integer" },
+                  "items":   { "type": "array", "items": { "$ref": "#/components/schemas/PosItemInput" } }
+                }
+              },
+              "example": {
+                "storeId": 1,
+                "items": [
+                  { "itemId": 11, "price": 9.99,  "priceLabel": "$9.99",  "isAvailable": 1 },
+                  { "itemId": 12, "price": 12.99, "priceLabel": "$12.99", "isAvailable": 1 },
+                  { "posCode": "BBQ-BAKER-MEAT", "price": 14.99, "priceLabel": "$14.99", "isAvailable": 1 }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Update result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/PosUpdateResponse" },
+                    { "type": "object", "properties": { "markedUnavailable": { "type": "integer", "description": "Items set unavailable because they were absent from the payload" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "description": "Unauthorized" },
+          "403": { "description": "Forbidden" }
+        }
+      }
+    },
+    "/menuboard/v1/pos/availability": {
+      "put": {
+        "tags": ["POS"],
+        "summary": "Update availability only (86 / restore)",
+        "operationId": "posUpdateAvailability",
+        "description": "Changes `isAvailable` without touching price or priceLabel. Use for 86-ing items mid-service without resending the full price sheet.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["items"],
+                "properties": {
+                  "storeId":     { "type": "integer" },
+                  "storeNumber": { "type": "string",  "description": "Client-assigned store number (alternative to storeId)." },
+                  "groupId":     { "type": "integer" },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "itemId":      { "type": "integer" },
+                        "posCode":     { "type": "string" },
+                        "isAvailable": { "type": "integer", "enum": [0, 1] }
+                      }
+                    }
+                  }
+                }
+              },
+              "examples": {
+                "86-items": {
+                  "summary": "Mark unavailable (86)",
+                  "value": { "storeId": 1, "items": [{ "itemId": 11, "isAvailable": 0 }, { "itemId": 12, "isAvailable": 0 }] }
+                },
+                "restore-items": {
+                  "summary": "Restore availability",
+                  "value": { "storeId": 1, "items": [{ "itemId": 11, "isAvailable": 1 }, { "itemId": 12, "isAvailable": 1 }] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Update result", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PosUpdateResponse" } } } },
+          "401": { "description": "Unauthorized" },
+          "403": { "description": "Forbidden" }
+        }
+      }
+    }
+  }
+}

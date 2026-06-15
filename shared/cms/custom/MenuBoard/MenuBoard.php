@@ -184,6 +184,13 @@ class MenuBoard extends ModuleWidget
             $pdo->exec("ALTER TABLE menuboard_api_keys ADD COLUMN groupId INT DEFAULT NULL AFTER storeId");
         } catch (\Exception $e) { /* already exists */ }
 
+        try {
+            $pdo->exec("ALTER TABLE menuboard_stores ADD COLUMN storeNumber VARCHAR(50) DEFAULT NULL AFTER storeName");
+        } catch (\Exception $e) { /* already exists */ }
+        try {
+            $pdo->exec("ALTER TABLE menuboard_stores ADD UNIQUE KEY uq_storeNumber (storeNumber)");
+        } catch (\Exception $e) { /* already exists */ }
+
         $pdo->exec("
             CREATE TABLE IF NOT EXISTS `menuboard_store_groups` (
                 `groupId`     INT          NOT NULL AUTO_INCREMENT,
@@ -203,6 +210,10 @@ class MenuBoard extends ModuleWidget
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         ");
 
+        try {
+            $pdo->exec("ALTER TABLE menuboard_themes ADD COLUMN updatedAt DATETIME DEFAULT NULL AFTER createdAt");
+        } catch (\Exception $e) { /* already exists */ }
+
         $count = $pdo->query("SELECT COUNT(*) FROM `menuboard_themes`")->fetchColumn();
         if ((int)$count === 0) {
             $stmt = $pdo->prepare(
@@ -221,10 +232,10 @@ class MenuBoard extends ModuleWidget
     public function setTemplateData($data)
     {
         $data['displayGroups'] = $this->getStore()->select(
-            "SELECT displayGroupId, displayGroup
-               FROM displaygroup
-              WHERE isDisplaySpecific = 0
-              ORDER BY displayGroup",
+            "SELECT storeId AS displayGroupId, storeName AS displayGroup
+               FROM menuboard_stores
+              WHERE isActive = 1
+              ORDER BY storeName",
             []
         );
 
@@ -333,6 +344,21 @@ class MenuBoard extends ModuleWidget
             $priceDt = $this->getDate()->parse($priceRows[0]['lastEffective'], 'Y-m-d H:i:s');
             if ($priceDt->greaterThan($baseDt)) {
                 $baseDt = $priceDt;
+            }
+        }
+
+        // Theme last-modified — invalidates cache when theme layout is edited
+        $themeId = (int)$this->getOption('themeId', 0);
+        if ($themeId > 0) {
+            $themeRows = $this->getStore()->select(
+                "SELECT updatedAt FROM menuboard_themes WHERE themeId = :tid LIMIT 1",
+                ['tid' => $themeId]
+            );
+            if ($themeRows && !empty($themeRows[0]['updatedAt'])) {
+                $themeDt = $this->getDate()->parse($themeRows[0]['updatedAt'], 'Y-m-d H:i:s');
+                if ($themeDt->greaterThan($baseDt)) {
+                    $baseDt = $themeDt;
+                }
             }
         }
 
@@ -521,7 +547,8 @@ class MenuBoard extends ModuleWidget
                 $opacity = '';
             } else {
                 $price   = $prices[$itemId] ?? null;
-                $opacity = ($price && !$price['isAvailable']) ? 'opacity:0.35;' : '';
+                if ($price && !$price['isAvailable']) continue;
+                $opacity = '';
                 if ($price && $price['priceLabel'] !== null && $price['priceLabel'] !== '') {
                     $displayText = htmlspecialchars($price['priceLabel'], ENT_QUOTES);
                 } elseif ($price && $price['price'] !== null) {

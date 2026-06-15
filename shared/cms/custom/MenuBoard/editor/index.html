@@ -87,7 +87,7 @@ button:disabled { background: #333; color: #666; cursor: default; }
     border-right: 2px solid #3a3a3a;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-y: auto;
     flex-shrink: 0;
 }
 .panel-section { padding: 8px 10px; border-bottom: 1px solid #2e2e2e; }
@@ -114,7 +114,7 @@ button:disabled { background: #333; color: #666; cursor: default; }
 .bg-input-row { display: flex; gap: 4px; align-items: flex-end; margin-bottom: 6px; }
 .bg-input-row input { flex: 1; }
 .bg-input-row button { flex-shrink: 0; padding: 0 8px; font-size: 11px; }
-#slotListWrap { flex: 1; overflow-y: auto; padding: 4px; }
+#slotListWrap { overflow-y: visible; padding: 4px; }
 .slot-entry {
     background: #2c2c2c;
     border: 1px solid #3a3a3a;
@@ -638,7 +638,7 @@ button:disabled { background: #333; color: #666; cursor: default; }
 
       <div id="slotProps" class="panel-section" style="display:none">
         <h3>Selected Field</h3>
-        <div class="field-row-2">
+        <div class="field-row-2" id="spXYRow">
           <div><label>X (px)</label><input type="number" id="spX" oninput="onPropChange()"></div>
           <div><label>Y (px)</label><input type="number" id="spY" oninput="onPropChange()"></div>
         </div>
@@ -879,6 +879,10 @@ button:disabled { background: #333; color: #666; cursor: default; }
             <input type="text" id="seStoreName">
           </div>
           <div class="field-row">
+            <label>Store Number <span style="color:#888;font-size:10px;font-weight:normal">(used by POS to identify this store)</span></label>
+            <input type="text" id="seStoreNumber" placeholder="e.g. 42 or DOWNTOWN">
+          </div>
+          <div class="field-row">
             <label>Contact Name</label>
             <input type="text" id="seContactName">
           </div>
@@ -914,6 +918,7 @@ button:disabled { background: #333; color: #666; cursor: default; }
           <div class="se-actions">
             <button class="green" onclick="saveStoreDetails()">💾 Save Store</button>
             <button class="grey"  onclick="loadStoresTab()">↻ Refresh</button>
+            <button class="red"   onclick="deleteStore()" style="margin-left:auto">🗑 Delete Store</button>
           </div>
         </div>
       </div>
@@ -980,6 +985,10 @@ button:disabled { background: #333; color: #666; cursor: default; }
       <div class="field-row" style="margin-bottom:12px">
         <label style="font-size:11px;color:#999;display:block;margin-bottom:3px">Store Name <span style="color:#d55">*</span></label>
         <input type="text" id="nsStoreName" style="width:100%" placeholder="">
+      </div>
+      <div class="field-row" style="margin-bottom:12px">
+        <label style="font-size:11px;color:#999;display:block;margin-bottom:3px">Store Number <span style="color:#666;font-size:10px">(POS identifier — can be set later)</span></label>
+        <input type="text" id="nsStoreNumber" style="width:100%" placeholder="e.g. 42 or DOWNTOWN">
       </div>
       <div class="field-row" style="margin-bottom:12px">
         <label style="font-size:11px;color:#999;display:block;margin-bottom:3px">Copy Prices From</label>
@@ -1909,26 +1918,38 @@ function updateSlotPropsPanel() {
         multiMsg.style.display = 'none';
         return;
     }
-    if (n > 1) {
-        panel.style.display    = 'none';
-        multiMsg.style.display = 'block';
-        multiMsg.textContent   = `${n} fields selected — use Align tools above, arrow keys to nudge, or Shift+click to adjust selection`;
-        return;
-    }
-    multiMsg.style.display = 'none';
+
     const slot = slots.find(s => s.id === primarySlotId);
-    if (!slot) { panel.style.display = 'none'; return; }
-    panel.style.display = 'block';
+    if (!slot) { panel.style.display = 'none'; multiMsg.style.display = 'none'; return; }
+
+    const isMulti = n > 1;
     const isShape = slot.type === 'rect' || slot.type === 'line';
     const isText  = slot.type === 'text';
-    document.getElementById('spX').value = slot.x;
-    document.getElementById('spY').value = slot.y;
+
+    // Multi-select hint above the props panel
+    if (isMulti) {
+        multiMsg.style.display = 'block';
+        multiMsg.textContent   = `${n} fields selected — changes apply to all`;
+    } else {
+        multiMsg.style.display = 'none';
+    }
+
+    panel.style.display = 'block';
+
+    // X/Y only meaningful for single selection
+    document.getElementById('spXYRow').style.display = isMulti ? 'none' : '';
+    if (!isMulti) {
+        document.getElementById('spX').value = slot.x;
+        document.getElementById('spY').value = slot.y;
+    }
     document.getElementById('spW').value = slot.w;
     document.getElementById('spH').value = slot.h;
-    // Text content row
-    document.getElementById('spTextContentRow').style.display = isText ? '' : 'none';
-    if (isText) document.getElementById('spTextContent').value = slot.content || '';
-    // Font props (price, name, text)
+
+    // Text content only for single selection
+    document.getElementById('spTextContentRow').style.display = (!isMulti && isText) ? '' : 'none';
+    if (!isMulti && isText) document.getElementById('spTextContent').value = slot.content || '';
+
+    // Font props (price, name, text, description)
     document.getElementById('spFontProps').style.display = isShape ? 'none' : '';
     if (!isShape) {
         document.getElementById('spFontSize').value   = slot.fontSize   || 32;
@@ -1961,65 +1982,99 @@ function syncPropsFromSlot(slot) {
 }
 
 function onPropChange() {
-    const slot = slots.find(s => s.id === primarySlotId);
-    if (!slot) return;
-    const isShape = slot.type === 'rect' || slot.type === 'line';
-    const isText  = slot.type === 'text';
-    slot.x = Math.max(0,  parseInt(document.getElementById('spX').value) || 0);
-    slot.y = Math.max(0,  parseInt(document.getElementById('spY').value) || 0);
-    slot.w = Math.max(20, parseInt(document.getElementById('spW').value) || 160);
-    slot.h = Math.max(10, parseInt(document.getElementById('spH').value) || 52);
-    if (isText) slot.content = document.getElementById('spTextContent').value;
-    if (!isShape) {
-        slot.fontSize   = Math.max(6, parseInt(document.getElementById('spFontSize').value) || 32);
-        slot.color      = document.getElementById('spColor').value;
-        slot.fontFamily = document.getElementById('spFontFamily').value;
-        slot.fontWeight = document.getElementById('spWeight').value;
-        slot.fontStyle  = document.getElementById('spStyle').value;
-        slot.textAlign  = document.getElementById('spAlign').value;
-    }
-    if (isShape) {
-        slot.fillColor = document.getElementById('spFillColor').value;
-        slot.opacity   = parseFloat(document.getElementById('spOpacity').value) || 1;
-        if (slot.type === 'rect') {
-            slot.strokeColor  = document.getElementById('spStrokeColor').value;
-            slot.strokeWidth  = parseInt(document.getElementById('spStrokeWidth').value) || 0;
-            slot.borderRadius = parseInt(document.getElementById('spBorderRadius').value) || 0;
+    const primary = slots.find(s => s.id === primarySlotId);
+    if (!primary) return;
+
+    const isMulti = selectedIds.size > 1;
+    const targets = isMulti ? slots.filter(s => selectedIds.has(s.id)) : [primary];
+
+    // Read current field values once
+    const newW        = Math.max(20, parseInt(document.getElementById('spW').value) || 160);
+    const newH        = Math.max(10, parseInt(document.getElementById('spH').value) || 52);
+    const newFontSize = Math.max(6,  parseInt(document.getElementById('spFontSize').value) || 32);
+    const newColor    = document.getElementById('spColor').value;
+    const newFamily   = document.getElementById('spFontFamily').value;
+    const newWeight   = document.getElementById('spWeight').value;
+    const newStyle    = document.getElementById('spStyle').value;
+    const newAlign    = document.getElementById('spAlign').value;
+    const newFill     = document.getElementById('spFillColor').value;
+    const newOpacity  = parseFloat(document.getElementById('spOpacity').value) || 1;
+    const newStrokeColor  = document.getElementById('spStrokeColor').value;
+    const newStrokeWidth  = parseInt(document.getElementById('spStrokeWidth').value) || 0;
+    const newBorderRadius = parseInt(document.getElementById('spBorderRadius').value) || 0;
+
+    targets.forEach(slot => {
+        const isShape = slot.type === 'rect' || slot.type === 'line';
+        const isText  = slot.type === 'text';
+
+        // X/Y only applied to primary slot (position is per-slot)
+        if (slot === primary && !isMulti) {
+            slot.x = Math.max(0, parseInt(document.getElementById('spX').value) || 0);
+            slot.y = Math.max(0, parseInt(document.getElementById('spY').value) || 0);
         }
-    }
-    const el = document.querySelector(`.pf[data-slot-id="${slot.id}"]`);
-    if (el) {
-        el.style.left   = (slot.x * scale) + 'px';
-        el.style.top    = (slot.y * scale) + 'px';
-        el.style.width  = (slot.w * scale) + 'px';
-        el.style.height = (slot.h * scale) + 'px';
+
+        slot.w = newW;
+        slot.h = newH;
+
+        // Text content only on single-select primary
+        if (!isMulti && isText) slot.content = document.getElementById('spTextContent').value;
+
+        if (!isShape) {
+            slot.fontSize   = newFontSize;
+            slot.color      = newColor;
+            slot.fontFamily = newFamily;
+            slot.fontWeight = newWeight;
+            slot.fontStyle  = newStyle;
+            slot.textAlign  = newAlign;
+        }
         if (isShape) {
-            el.style.background   = slot.fillColor || '#333';
-            el.style.opacity      = slot.opacity   ?? 1;
-            el.style.border       = slot.type === 'rect'
-                ? `${slot.strokeWidth ?? 2}px solid ${slot.strokeColor || '#fff'}`
-                : 'none';
-            el.style.borderRadius = slot.type === 'rect' ? (slot.borderRadius ?? 0) + 'px' : '0';
-        } else {
-            const p = el.querySelector('.pf-preview');
-            if (p) {
-                p.style.fontSize       = (slot.fontSize * scale) + 'px';
-                p.style.color          = slot.color;
-                p.style.fontFamily     = slot.fontFamily || 'Arial, sans-serif';
-                p.style.fontWeight     = slot.fontWeight;
-                p.style.fontStyle      = slot.fontStyle  || 'normal';
-                p.style.justifyContent = slot.textAlign === 'left'   ? 'flex-start'
-                                       : slot.textAlign === 'center' ? 'center'
-                                       :                               'flex-end';
-                if (isText) p.textContent = slot.content || '';
-            }
-            if (isText) {
-                const badge = el.querySelector('.pf-name-badge');
-                if (badge) badge.textContent = slot.content || 'Text';
-                rebuildSlotList();
+            slot.fillColor = newFill;
+            slot.opacity   = newOpacity;
+            if (slot.type === 'rect') {
+                slot.strokeColor  = newStrokeColor;
+                slot.strokeWidth  = newStrokeWidth;
+                slot.borderRadius = newBorderRadius;
             }
         }
-    }
+
+        // Update canvas element
+        const el = document.querySelector(`.pf[data-slot-id="${slot.id}"]`);
+        if (el) {
+            if (slot === primary && !isMulti) {
+                el.style.left = (slot.x * scale) + 'px';
+                el.style.top  = (slot.y * scale) + 'px';
+            }
+            el.style.width  = (slot.w * scale) + 'px';
+            el.style.height = (slot.h * scale) + 'px';
+            if (isShape) {
+                el.style.background   = slot.fillColor || '#333';
+                el.style.opacity      = slot.opacity   ?? 1;
+                el.style.border       = slot.type === 'rect'
+                    ? `${slot.strokeWidth ?? 2}px solid ${slot.strokeColor || '#fff'}`
+                    : 'none';
+                el.style.borderRadius = slot.type === 'rect' ? (slot.borderRadius ?? 0) + 'px' : '0';
+            } else {
+                const p = el.querySelector('.pf-preview');
+                if (p) {
+                    p.style.fontSize       = (slot.fontSize * scale) + 'px';
+                    p.style.color          = slot.color;
+                    p.style.fontFamily     = slot.fontFamily || 'Arial, sans-serif';
+                    p.style.fontWeight     = slot.fontWeight;
+                    p.style.fontStyle      = slot.fontStyle  || 'normal';
+                    p.style.justifyContent = slot.textAlign === 'left'   ? 'flex-start'
+                                           : slot.textAlign === 'center' ? 'center'
+                                           :                               'flex-end';
+                    if (!isMulti && isText) p.textContent = slot.content || '';
+                }
+                if (!isMulti && isText) {
+                    const badge = el.querySelector('.pf-name-badge');
+                    if (badge) badge.textContent = slot.content || 'Text';
+                    rebuildSlotList();
+                }
+            }
+        }
+    });
+
     markDirty();
 }
 
@@ -2472,7 +2527,8 @@ async function refreshConceptBadge() {
 // ── NEW STORE MODAL ───────────────────────────────────────────────────────────
 
 function openNewStoreModal() {
-    document.getElementById('nsStoreName').value = '';
+    document.getElementById('nsStoreName').value   = '';
+    document.getElementById('nsStoreNumber').value = '';
     // Populate copy-from dropdown
     const copyFrom = document.getElementById('nsCopyFrom');
     copyFrom.innerHTML = '<option value="">— start empty —</option>';
@@ -2523,12 +2579,12 @@ async function saveNewStore() {
     try {
         const res  = await fetch(`${API}?action=store`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ storeName: name, concepts, copyPricesFrom: copyFrom }),
+            body: JSON.stringify({ storeName: name, storeNumber: document.getElementById('nsStoreNumber').value.trim() || null, concepts, copyPricesFrom: copyFrom }),
         });
         const data = await res.json();
         if (data.error) { setStatus(data.error, 'err'); return; }
         closeNewStoreModal();
-        await loadStores();
+        await loadStoresTab();
         document.getElementById('priceStoreSelect').value = data.storeId;
         await onStoreSelectChange();
         setStatus(`Store "${name}" created`, 'ok');
@@ -3581,7 +3637,8 @@ function renderStoreList() {
             (isEditing ? ' active' : '') +
             (active    ? '' : ' inactive-store');
         let meta = '';
-        if (s.contactName)  meta += s.contactName;
+        if (s.storeNumber)  meta += '#' + s.storeNumber;
+        if (s.contactName)  meta += (meta ? ' · ' : '') + s.contactName;
         if (s.phoneNumber)  meta += (meta ? ' · ' : '') + s.phoneNumber;
         if (!active)        meta += (meta ? ' · ' : '') + 'INACTIVE';
         div.innerHTML = `<div class="sli-name">${esc(s.storeName)}</div>` +
@@ -3608,6 +3665,7 @@ async function openStoreEdit(storeId) {
         if (store.error) { setStatus(store.error, 'err'); return; }
 
         document.getElementById('seStoreName').value    = store.storeName    || '';
+        document.getElementById('seStoreNumber').value  = store.storeNumber  || '';
         document.getElementById('seContactName').value  = store.contactName  || '';
         document.getElementById('seStoreAddress').value = store.storeAddress || '';
         document.getElementById('sePhoneNumber').value  = store.phoneNumber  || '';
@@ -3652,6 +3710,7 @@ async function saveStoreDetails() {
 
     const payload = {
         storeName:    name,
+        storeNumber:  document.getElementById('seStoreNumber').value.trim() || null,
         contactName:  document.getElementById('seContactName').value.trim(),
         storeAddress: document.getElementById('seStoreAddress').value.trim(),
         phoneNumber:  document.getElementById('sePhoneNumber').value.trim(),
@@ -3673,6 +3732,25 @@ async function saveStoreDetails() {
         setStatus(`Store "${name}" saved`, 'ok');
     } catch(e) {
         setStatus('Failed to save store: ' + e.message, 'err');
+    }
+}
+
+async function deleteStore() {
+    if (!storeEditId) return;
+    const name = document.getElementById('seStoreName').value.trim() ||
+                 document.getElementById('storeEditTitle').textContent;
+    if (!confirm(`Permanently delete "${name}"?\n\nThis will remove all prices, schedules, and API keys for this store and cannot be undone.`)) return;
+    try {
+        const res  = await fetch(`${API}?action=store&storeId=${storeEditId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.error) { setStatus(data.error, 'err'); return; }
+        storeEditId = null;
+        document.getElementById('storeEditForm').style.display  = 'none';
+        document.getElementById('storeEditEmpty').style.display = '';
+        await loadStoresTab();
+        setStatus(`Store "${name}" deleted`, 'ok');
+    } catch(e) {
+        setStatus('Failed to delete store: ' + e.message, 'err');
     }
 }
 
